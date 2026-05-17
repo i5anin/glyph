@@ -57,6 +57,12 @@ const headerHeight = computed(() => props.data.headerHeight ?? 32)
   background: linear-gradient(180deg, rgba(26, 38, 56, 0.85), rgba(15, 23, 34, 0.7));
   border-bottom: 1px dashed color-mix(in oklab, var(--gc) 60%, transparent);
   color: var(--text-dim);
+  cursor: grab;
+  user-select: none;
+}
+
+.group-node__header:active {
+  cursor: grabbing;
 }
 
 .group-node__icon {

@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Handle, Position, type NodeProps } from '@vue-flow/core'
+import { computed, inject } from 'vue'
+import { Handle, Position, useVueFlow, type NodeProps } from '@vue-flow/core'
 import type { NodeSpec, AccentColor } from '../dsl/schema'
+
+type NodePatchFn = (id: string, patch: Record<string, unknown>) => void
+type RowPatchFn = (
+  nodeId: string,
+  rowId: string,
+  patch: { label?: string; value?: string },
+) => void
+
+const nodePatch = inject<NodePatchFn>('glyph:nodePatch', () => {})
+const rowPatch = inject<RowPatchFn>('glyph:rowPatch', () => {})
 import {
   AppWindow,
   Box,
@@ -26,6 +36,21 @@ import {
 const props = defineProps<NodeProps<NodeSpec>>()
 
 const node = computed(() => props.data)
+
+const { edges } = useVueFlow()
+
+const connectedHandleIds = computed(() => {
+  const set = new Set<string>()
+  for (const e of edges.value) {
+    if (e.source === props.id && e.sourceHandle) set.add(`${e.sourceHandle}`)
+    if (e.target === props.id && e.targetHandle) set.add(`${e.targetHandle}`)
+  }
+  return set
+})
+
+function isHandleConnected(rowId: string, kind: 'source' | 'target'): boolean {
+  return connectedHandleIds.value.has(`${rowId}-${kind}`)
+}
 
 const iconMap: Record<string, LucideIcon> = {
   'app-window': AppWindow,
@@ -68,13 +93,55 @@ function progressPercent(current: number, max: number): number {
   if (max <= 0) return 0
   return Math.max(0, Math.min(100, (current / max) * 100))
 }
+
+function onTitleBlur(ev: FocusEvent) {
+  const next = (ev.target as HTMLElement).textContent?.trim() ?? ''
+  if (next && next !== node.value.title) {
+    nodePatch(props.id, { title: next })
+  }
+}
+
+function onRowLabelBlur(rowId: string, ev: FocusEvent) {
+  const next = (ev.target as HTMLElement).textContent?.trim() ?? ''
+  const row = node.value.rows?.find((r) => r.id === rowId)
+  if (row && next && next !== row.label) {
+    rowPatch(props.id, rowId, { label: next })
+  }
+}
+
+function onRowValueBlur(rowId: string, ev: FocusEvent) {
+  const next = (ev.target as HTMLElement).textContent?.trim() ?? ''
+  const row = node.value.rows?.find((r) => r.id === rowId)
+  if (row && next !== String(row.value ?? '')) {
+    rowPatch(props.id, rowId, { value: next })
+  }
+}
+
+function onEnterBlur(ev: KeyboardEvent) {
+  if (ev.key === 'Enter') {
+    ev.preventDefault()
+    ;(ev.target as HTMLElement).blur()
+  }
+  if (ev.key === 'Escape') {
+    ev.preventDefault()
+    ;(ev.target as HTMLElement).blur()
+  }
+}
 </script>
 
 <template>
   <div class="obs-node">
     <div class="obs-node__header">
       <component :is="iconFor(node.icon)" :size="16" :stroke-width="2" class="obs-node__header-icon" />
-      <span class="obs-node__title">{{ node.title }}</span>
+      <span
+        class="obs-node__title nodrag nopan"
+        contenteditable="plaintext-only"
+        spellcheck="false"
+        :title="'Кликни, чтобы переименовать'"
+        @blur="onTitleBlur"
+        @keydown="onEnterBlur"
+        @mousedown.stop
+      >{{ node.title }}</span>
     </div>
 
     <div v-if="node.rows && node.rows.length" class="obs-node__rows">
@@ -91,8 +158,23 @@ function progressPercent(current: number, max: number): number {
           :style="{ color: colorOf(row.color) }"
         />
         <div class="obs-node__row-text">
-          <div class="obs-node__row-label">{{ row.label }}</div>
-          <div v-if="row.value !== undefined" class="obs-node__row-value">{{ row.value }}</div>
+          <div
+            class="obs-node__row-label nodrag nopan"
+            contenteditable="plaintext-only"
+            spellcheck="false"
+            @blur="onRowLabelBlur(row.id, $event)"
+            @keydown="onEnterBlur"
+            @mousedown.stop
+          >{{ row.label }}</div>
+          <div
+            v-if="row.value !== undefined"
+            class="obs-node__row-value nodrag nopan"
+            contenteditable="plaintext-only"
+            spellcheck="false"
+            @blur="onRowValueBlur(row.id, $event)"
+            @keydown="onEnterBlur"
+            @mousedown.stop
+          >{{ row.value }}</div>
         </div>
 
         <Handle
@@ -101,22 +183,30 @@ function progressPercent(current: number, max: number): number {
           type="target"
           :position="Position.Left"
           class="obs-handle"
-          :style="{
-            background: colorOf(row.color),
-            boxShadow: `0 0 6px ${colorOf(row.color)}`,
-          }"
+          :class="isHandleConnected(row.id, 'target') ? 'obs-handle--on' : 'obs-handle--off'"
+          :title="
+            isHandleConnected(row.id, 'target')
+              ? 'Потяни и брось в пустоту, чтобы отсоединить'
+              : 'Потяни отсюда, чтобы создать связь'
+          "
+          :style="{ '--hc': colorOf(row.color) }"
         />
+
         <Handle
           v-if="row.type === 'source' || row.type === 'both'"
           :id="`${row.id}-source`"
           type="source"
           :position="Position.Right"
           class="obs-handle"
-          :style="{
-            background: colorOf(row.color),
-            boxShadow: `0 0 6px ${colorOf(row.color)}`,
-          }"
+          :class="isHandleConnected(row.id, 'source') ? 'obs-handle--on' : 'obs-handle--off'"
+          :title="
+            isHandleConnected(row.id, 'source')
+              ? 'Потяни и брось в пустоту, чтобы отсоединить'
+              : 'Потяни отсюда, чтобы создать связь'
+          "
+          :style="{ '--hc': colorOf(row.color) }"
         />
+
         <span
           v-if="!row.type || row.type === 'none'"
           class="obs-node__dot"
@@ -192,6 +282,23 @@ function progressPercent(current: number, max: number): number {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  outline: none;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  cursor: text;
+}
+
+.obs-node__title:hover {
+  background: rgba(79, 209, 255, 0.08);
+}
+
+.obs-node__title:focus {
+  background: rgba(79, 209, 255, 0.14);
+  box-shadow: 0 0 0 1px var(--accent-cyan);
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .obs-node__rows {
@@ -206,7 +313,8 @@ function progressPercent(current: number, max: number): number {
   align-items: center;
   gap: 8px;
   min-height: var(--row-h);
-  padding: 6px 14px 6px 12px;
+  /* extra side padding leaves breathing room around the handles inside the node */
+  padding: 6px 28px 6px 28px;
   border-bottom: 1px solid var(--node-divider);
 }
 
@@ -224,6 +332,28 @@ function progressPercent(current: number, max: number): number {
   gap: 1px;
   text-align: right;
   min-width: 0;
+}
+
+.obs-node__row-label,
+.obs-node__row-value {
+  outline: none;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  cursor: text;
+}
+
+.obs-node__row-label:hover,
+.obs-node__row-value:hover {
+  background: rgba(79, 209, 255, 0.08);
+}
+
+.obs-node__row-label:focus,
+.obs-node__row-value:focus {
+  background: rgba(79, 209, 255, 0.14);
+  box-shadow: 0 0 0 1px var(--accent-cyan);
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .obs-node__row-label {
@@ -248,21 +378,63 @@ function progressPercent(current: number, max: number): number {
   margin-left: 4px;
 }
 
-/* Vue Flow handles — position to row right edge */
+/* ─── Handles ─────────────────────────────────────────── */
 .obs-handle {
-  width: 10px !important;
-  height: 10px !important;
+  width: 12px !important;
+  height: 12px !important;
   border-radius: 50% !important;
-  border: 2px solid var(--node-bg) !important;
-  z-index: 2;
+  z-index: 3;
+  background: transparent !important;
+  border: none !important;
+  transition: transform 0.12s ease;
 }
 
+/* Handles live INSIDE the node — wires plug into the row content,
+   mirroring Upload Labs where the connector dot sits next to the label. */
 .obs-handle.vue-flow__handle-left {
-  left: -5px !important;
+  left: 8px !important;
+}
+.obs-handle.vue-flow__handle-right {
+  right: 8px !important;
 }
 
-.obs-handle.vue-flow__handle-right {
-  right: -5px !important;
+/* connected: filled + glow */
+.obs-handle--on {
+  background: var(--hc) !important;
+  box-shadow:
+    0 0 0 2px var(--node-bg),
+    0 0 8px var(--hc),
+    0 0 14px var(--hc);
+}
+
+/* free: hollow ring, no glow */
+.obs-handle--off {
+  background: var(--node-bg) !important;
+  box-shadow:
+    inset 0 0 0 2px var(--hc),
+    0 0 0 2px var(--node-bg);
+  opacity: 0.7;
+}
+
+.obs-handle--off:hover {
+  opacity: 1;
+  transform: scale(1.25);
+  box-shadow:
+    inset 0 0 0 2px var(--hc),
+    0 0 0 2px var(--node-bg),
+    0 0 10px var(--hc);
+}
+
+.obs-handle--on:hover {
+  transform: scale(1.15);
+}
+
+/* connected handle = grab handle for the wire's endpoint */
+.obs-handle {
+  cursor: grab;
+}
+.obs-handle:active {
+  cursor: grabbing;
 }
 
 .obs-node__progress {

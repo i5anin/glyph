@@ -34,11 +34,14 @@ export interface NodeSpec {
   group?: string
 }
 
+export type EdgeShape = 'smoothstep' | 'step' | 'bezier' | 'straight'
+
 export interface EdgeSpec {
   from: string
   to: string
   color?: AccentColor
   label?: string
+  shape?: EdgeShape
 }
 
 export interface JunctionSpec {

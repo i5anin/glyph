@@ -1,25 +1,46 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BaseEdge, getBezierPath, type EdgeProps, Position } from '@vue-flow/core'
+import {
+  BaseEdge,
+  getBezierPath,
+  getSmoothStepPath,
+  getStraightPath,
+  type EdgeProps,
+  Position,
+} from '@vue-flow/core'
+
+type EdgeShape = 'smoothstep' | 'step' | 'bezier' | 'straight'
 
 interface EdgeData {
   color?: 'cyan' | 'green' | 'magenta' | 'orange' | 'yellow' | 'gray'
   label?: string
+  shape?: EdgeShape
 }
 
 const props = defineProps<EdgeProps<EdgeData>>()
 
-const path = computed(() =>
-  getBezierPath({
+const path = computed(() => {
+  const shape: EdgeShape = props.data?.shape ?? 'smoothstep'
+  const common = {
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition ?? Position.Right,
     targetX: props.targetX,
     targetY: props.targetY,
     targetPosition: props.targetPosition ?? Position.Left,
-    curvature: 0.35,
-  }),
-)
+  }
+  switch (shape) {
+    case 'bezier':
+      return getBezierPath({ ...common, curvature: 0.35 })
+    case 'step':
+      return getSmoothStepPath({ ...common, borderRadius: 0 })
+    case 'straight':
+      return getStraightPath(common)
+    case 'smoothstep':
+    default:
+      return getSmoothStepPath({ ...common, borderRadius: 10 })
+  }
+})
 
 const color = computed(() => {
   const c = props.data?.color ?? 'cyan'

@@ -54,7 +54,7 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
   const junctionIds = new Set(junctions.map((j) => j.id))
 
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 110, marginx: 30, marginy: 30 })
+  g.setGraph({ rankdir: 'LR', nodesep: 70, ranksep: 120, marginx: 30, marginy: 30 })
   g.setDefaultEdgeLabel(() => ({}))
 
   const heights = new Map<string, number>()
@@ -136,8 +136,9 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
       position: { x: box.x, y: box.y },
       data: { ...grp, headerHeight: GROUP_HEADER },
       style: { width: `${box.w}px`, height: `${box.h}px`, zIndex: 0 },
-      selectable: false,
-      draggable: false,
+      selectable: true,
+      draggable: true,
+      dragHandle: '.group-node__header',
     })
   }
 
@@ -210,7 +211,7 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
       target: to.nodeId,
       targetHandle,
       type: 'flow',
-      data: { color: e.color ?? 'cyan', label: e.label },
+      data: { color: e.color ?? 'cyan', label: e.label, shape: e.shape ?? 'smoothstep' },
     }
   })
 

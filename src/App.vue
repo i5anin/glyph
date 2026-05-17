@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
-import type { Edge, Node } from '@vue-flow/core'
+import type { Connection, Edge, Node } from '@vue-flow/core'
+import { PanelLeft } from 'lucide-vue-next'
 import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
+import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
+import type { NodeSpec, ObstructionDoc } from './dsl/schema'
 import { vueAppDemo } from './demo/vueAppDemo'
 import GraphCanvas from './components/GraphCanvas.vue'
 import DslEditor from './components/DslEditor.vue'
@@ -13,9 +16,17 @@ const error = ref<string | null>(null)
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
 
-function apply(text: string) {
+// current canonical doc — single source of truth. Updated from either side.
+const currentDoc = shallowRef<ObstructionDoc>({ nodes: [], edges: [] })
+
+// guard against feedback loops when we programmatically rewrite the textarea
+let syncingFromGraph = false
+
+function applyFromDsl(text: string) {
+  if (syncingFromGraph) return
   try {
     const doc = parseDsl(text)
+    currentDoc.value = doc
     const flow = toFlow(doc)
     nodes.value = flow.nodes
     edges.value = flow.edges
@@ -26,35 +37,174 @@ function apply(text: string) {
   }
 }
 
-apply(dslText.value)
+function applyFromDoc(next: ObstructionDoc) {
+  currentDoc.value = next
+  const flow = toFlow(next)
+  nodes.value = flow.nodes
+  edges.value = flow.edges
+  syncingFromGraph = true
+  dslText.value = toDsl(next)
+  // release the guard on the next tick — watchDebounced will see it after debounce
+  setTimeout(() => {
+    syncingFromGraph = false
+  }, 0)
+}
 
-watchDebounced(
-  dslText,
-  (v) => apply(v),
-  { debounce: 300, maxWait: 1200 },
-)
+applyFromDsl(dslText.value)
 
-// keep ref types from being tree-shaken in dev
+watchDebounced(dslText, (v) => applyFromDsl(v), { debounce: 300, maxWait: 1200 })
+
 watch(error, () => {})
+
+// ─── graph-side mutations ───
+
+function onConnect(c: Connection) {
+  const e = edgeSpecFromConnection(c)
+  if (!e) return
+  applyFromDoc({
+    ...currentDoc.value,
+    edges: [...currentDoc.value.edges, e],
+  })
+}
+
+function onEdgeUpdate(oldEdgeId: string, conn: Connection) {
+  if (!conn.source || !conn.target) return
+  const idx = currentDoc.value.edges.findIndex(
+    (_, i) => `e${i}-${currentDoc.value.edges[i]!.from}->${currentDoc.value.edges[i]!.to}` === oldEdgeId,
+  )
+  if (idx === -1) return
+  const old = currentDoc.value.edges[idx]!
+  const next = [...currentDoc.value.edges]
+  next[idx] = {
+    ...old,
+    from: endpointRefFromHandle(conn.source, conn.sourceHandle),
+    to: endpointRefFromHandle(conn.target, conn.targetHandle),
+  }
+  applyFromDoc({ ...currentDoc.value, edges: next })
+}
+
+function onEdgeRemove(edgeId: string) {
+  const idx = currentDoc.value.edges.findIndex(
+    (_, i) => `e${i}-${currentDoc.value.edges[i]!.from}->${currentDoc.value.edges[i]!.to}` === edgeId,
+  )
+  if (idx === -1) return
+  const next = currentDoc.value.edges.filter((_, i) => i !== idx)
+  applyFromDoc({ ...currentDoc.value, edges: next })
+}
+
+// Inline-edit on a node: receive a partial patch and merge.
+function onNodePatch(nodeId: string, patch: Partial<NodeSpec>) {
+  const idx = currentDoc.value.nodes.findIndex((n) => n.id === nodeId)
+  if (idx === -1) return
+  const next = [...currentDoc.value.nodes]
+  next[idx] = { ...next[idx]!, ...patch }
+  applyFromDoc({ ...currentDoc.value, nodes: next })
+}
+
+// Edit a single row inside a node.
+function onRowPatch(
+  nodeId: string,
+  rowId: string,
+  patch: { label?: string; value?: string },
+) {
+  const idx = currentDoc.value.nodes.findIndex((n) => n.id === nodeId)
+  if (idx === -1) return
+  const n = currentDoc.value.nodes[idx]!
+  const rows = (n.rows ?? []).map((r) => (r.id === rowId ? { ...r, ...patch } : r))
+  const nextNodes = [...currentDoc.value.nodes]
+  nextNodes[idx] = { ...n, rows }
+  applyFromDoc({ ...currentDoc.value, nodes: nextNodes })
+}
+
+// ─── DSL panel width (draggable) ─────────────────────────
+const DSL_MIN = 220
+const DSL_MAX_FRACTION = 0.7
+const dslWidth = ref(420) // px
+const dslWidthBeforeCollapse = ref(420)
+const dslCollapsed = computed(() => dslWidth.value < 12)
+
+function toggleDsl() {
+  if (dslCollapsed.value) {
+    dslWidth.value = Math.max(DSL_MIN, dslWidthBeforeCollapse.value || 420)
+  } else {
+    dslWidthBeforeCollapse.value = dslWidth.value
+    dslWidth.value = 0
+  }
+}
+
+let dragging = false
+function onSplitterPointerDown(ev: PointerEvent) {
+  if (ev.button !== 0) return
+  dragging = true
+  ;(ev.target as HTMLElement).setPointerCapture(ev.pointerId)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+function onSplitterPointerMove(ev: PointerEvent) {
+  if (!dragging) return
+  const max = window.innerWidth * DSL_MAX_FRACTION
+  const next = Math.max(0, Math.min(max, ev.clientX))
+  // snap-close below half of the minimum
+  dslWidth.value = next < DSL_MIN / 2 ? 0 : Math.max(DSL_MIN, next)
+}
+function onSplitterPointerUp(ev: PointerEvent) {
+  if (!dragging) return
+  dragging = false
+  ;(ev.target as HTMLElement).releasePointerCapture?.(ev.pointerId)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  if (dslWidth.value > 0) dslWidthBeforeCollapse.value = dslWidth.value
+}
 </script>
 
 <template>
   <div class="app">
     <header class="app__top">
       <div class="app__brand">
+        <button
+          v-if="dslCollapsed"
+          class="app__toggle-dsl"
+          type="button"
+          title="Показать YAML"
+          @click="toggleDsl"
+        >
+          <PanelLeft :size="14" :stroke-width="2.2" />
+        </button>
         <span class="app__brand-mark">◆</span>
         <span class="app__brand-name">Glyph</span>
         <span class="app__brand-sub">architecture as glyphs · prototype</span>
       </div>
       <div class="app__hint">
-        <span class="kbd">YAML</span> слева →
+        <span class="kbd">YAML</span> слева ↔
         <span class="dot dot--cyan"></span><span class="dot dot--green"></span> граф справа
+        — правки в обе стороны
       </div>
     </header>
 
-    <main class="app__main">
-      <DslEditor v-model="dslText" :error="error" />
-      <GraphCanvas :nodes="nodes" :edges="edges" />
+    <main
+      class="app__main"
+      :style="{ gridTemplateColumns: `${dslWidth}px 6px 1fr` }"
+    >
+      <DslEditor v-model="dslText" :error="error" @collapse="toggleDsl" />
+      <div
+        class="app__splitter"
+        :class="{ 'app__splitter--collapsed': dslCollapsed }"
+        @pointerdown="onSplitterPointerDown"
+        @pointermove="onSplitterPointerMove"
+        @pointerup="onSplitterPointerUp"
+        @pointercancel="onSplitterPointerUp"
+        @dblclick="toggleDsl"
+        title="Тяни, чтобы изменить ширину · двойной клик — свернуть/раскрыть"
+      ></div>
+      <GraphCanvas
+        :nodes="nodes"
+        :edges="edges"
+        @connect="onConnect"
+        @edge-update="onEdgeUpdate"
+        @edge-remove="onEdgeRemove"
+        @node-patch="onNodePatch"
+        @row-patch="onRowPatch"
+      />
     </main>
   </div>
 </template>
@@ -139,7 +289,59 @@ watch(error, () => {})
 
 .app__main {
   display: grid;
-  grid-template-columns: 420px 1fr;
+  /* columns set inline via :style — dsl | splitter | graph */
   min-height: 0;
+}
+
+.app__splitter {
+  position: relative;
+  background: var(--node-border);
+  cursor: col-resize;
+  transition: background 0.15s ease;
+  touch-action: none;
+}
+
+.app__splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+  /* widen the hit-zone without expanding visual width */
+}
+
+.app__splitter:hover,
+.app__splitter:active {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+.app__splitter--collapsed {
+  background: var(--node-divider);
+}
+.app__splitter--collapsed:hover {
+  background: var(--accent-cyan);
+}
+
+.app__toggle-dsl {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--node-divider);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  margin-right: 4px;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+
+.app__toggle-dsl:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.08);
 }
 </style>
