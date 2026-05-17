@@ -4,6 +4,16 @@
   "private": true,
   "type": "module",
   "description": "Architecture as glyphs — text DSL into a live animated graph (Upload Labs aesthetic)",
+  "license": "MIT",
+  "author": {
+    "name": "Sergey Isanin",
+    "email": "sergey.isanin+github@gmail.com",
+    "url": "https://github.com/i5anin"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/i5anin/glyph.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
