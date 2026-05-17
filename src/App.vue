@@ -6,10 +6,11 @@ import { PanelLeft } from 'lucide-vue-next'
 import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
 import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
-import type { NodeSpec, ObstructionDoc } from './dsl/schema'
+import type { JunctionSpec, NodeSpec, ObstructionDoc } from './dsl/schema'
 import { vueAppDemo } from './demo/vueAppDemo'
 import GraphCanvas from './components/GraphCanvas.vue'
 import DslEditor from './components/DslEditor.vue'
+import Toolbar, { type Tool } from './components/Toolbar.vue'
 
 const dslText = ref(vueAppDemo)
 const error = ref<string | null>(null)
@@ -116,6 +117,49 @@ function onRowPatch(
   applyFromDoc({ ...currentDoc.value, nodes: nextNodes })
 }
 
+// ─── Toolbar mode ───────────────────────────────────────
+const tool = ref<Tool>('cursor')
+
+// When user clicks an edge in waypoint mode — split the edge by inserting a
+// junction at the click point, and route both halves through it. The DSL
+// updates so the new structure is durable.
+function onEdgeWaypointClick(payload: { edgeId: string; flowX: number; flowY: number }) {
+  const idx = currentDoc.value.edges.findIndex(
+    (_, i) =>
+      `e${i}-${currentDoc.value.edges[i]!.from}->${currentDoc.value.edges[i]!.to}` === payload.edgeId,
+  )
+  if (idx === -1) return
+  const old = currentDoc.value.edges[idx]!
+
+  // generate a unique junction id
+  const existingIds = new Set([
+    ...currentDoc.value.nodes.map((n) => n.id),
+    ...(currentDoc.value.junctions ?? []).map((j) => j.id),
+  ])
+  let n = (currentDoc.value.junctions ?? []).length + 1
+  let jid = `J${n}`
+  while (existingIds.has(jid)) {
+    n += 1
+    jid = `J${n}`
+  }
+
+  const newJunction: JunctionSpec = { id: jid, color: old.color }
+  const nextEdges = [...currentDoc.value.edges]
+  // edge from = source → junction(left); edge to = junction(right) → target
+  nextEdges.splice(
+    idx,
+    1,
+    { ...old, to: `${jid}.l` },
+    { from: `${jid}.r`, to: old.to, color: old.color, shape: old.shape },
+  )
+
+  applyFromDoc({
+    ...currentDoc.value,
+    junctions: [...(currentDoc.value.junctions ?? []), newJunction],
+    edges: nextEdges,
+  })
+}
+
 // ─── DSL panel width (draggable) ─────────────────────────
 const DSL_MIN = 220
 const DSL_MAX_FRACTION = 0.7
@@ -196,15 +240,20 @@ function onSplitterPointerUp(ev: PointerEvent) {
         @dblclick="toggleDsl"
         title="Тяни, чтобы изменить ширину · двойной клик — свернуть/раскрыть"
       ></div>
-      <GraphCanvas
-        :nodes="nodes"
-        :edges="edges"
-        @connect="onConnect"
-        @edge-update="onEdgeUpdate"
-        @edge-remove="onEdgeRemove"
-        @node-patch="onNodePatch"
-        @row-patch="onRowPatch"
-      />
+      <div class="app__canvas-wrap">
+        <GraphCanvas
+          :nodes="nodes"
+          :edges="edges"
+          :tool="tool"
+          @connect="onConnect"
+          @edge-update="onEdgeUpdate"
+          @edge-remove="onEdgeRemove"
+          @node-patch="onNodePatch"
+          @row-patch="onRowPatch"
+          @edge-waypoint="onEdgeWaypointClick"
+        />
+        <Toolbar v-model="tool" />
+      </div>
     </main>
   </div>
 </template>
@@ -290,6 +339,12 @@ function onSplitterPointerUp(ev: PointerEvent) {
 .app__main {
   display: grid;
   /* columns set inline via :style — dsl | splitter | graph */
+  min-height: 0;
+}
+
+.app__canvas-wrap {
+  position: relative;
+  min-width: 0;
   min-height: 0;
 }
 

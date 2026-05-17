@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { NodeProps } from '@vue-flow/core'
+import { NodeResizer } from '@vue-flow/node-resizer'
+import '@vue-flow/node-resizer/dist/style.css'
 import { Folder, Palette, Pencil } from 'lucide-vue-next'
 import type { GroupSpec, AccentColor } from '../dsl/schema'
 
@@ -22,6 +24,20 @@ const headerHeight = computed(() => props.data.headerHeight ?? 32)
 
 <template>
   <div class="group-node" :style="{ '--gc': color, '--gh': headerHeight + 'px' }">
+    <NodeResizer
+      :is-visible="props.selected"
+      :min-width="180"
+      :min-height="120"
+      :color="color"
+      :handle-style="{
+        width: '10px',
+        height: '10px',
+        borderRadius: '2px',
+        background: color,
+        border: '2px solid var(--node-bg)',
+      }"
+      :line-style="{ borderColor: color, borderWidth: '1px' }"
+    />
     <div class="group-node__header">
       <Folder :size="13" :stroke-width="2" class="group-node__icon" />
       <span class="group-node__title">{{ title }}</span>
@@ -45,7 +61,12 @@ const headerHeight = computed(() => props.data.headerHeight ?? 32)
     inset 0 0 0 1px rgba(255, 255, 255, 0.02),
     0 0 20px rgba(0, 0, 0, 0.35);
   position: relative;
-  overflow: hidden;
+  /* no overflow:hidden — NodeResizer handles must be allowed to overflow */
+}
+
+.group-node__header {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .group-node__header {

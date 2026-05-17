@@ -14,9 +14,12 @@ import FlowEdge from './FlowEdge.vue'
 import JunctionNode from './JunctionNode.vue'
 import GroupNode from './GroupNode.vue'
 
+type Tool = 'cursor' | 'move' | 'select' | 'waypoint'
+
 const props = defineProps<{
   nodes: Node[]
   edges: Edge[]
+  tool?: Tool
 }>()
 
 const emit = defineEmits<{
@@ -25,7 +28,24 @@ const emit = defineEmits<{
   'edge-remove': [edgeId: string]
   'node-patch': [nodeId: string, patch: Record<string, unknown>]
   'row-patch': [nodeId: string, rowId: string, patch: { label?: string; value?: string }]
+  'edge-waypoint': [payload: { edgeId: string; flowX: number; flowY: number }]
 }>()
+
+// Per-tool Vue Flow behaviour
+const flowMode = computed(() => {
+  const t = props.tool ?? 'cursor'
+  switch (t) {
+    case 'move':
+      return { nodesDraggable: false, panOnDrag: true, selectionOnDrag: false, edgesUpdatable: false }
+    case 'select':
+      return { nodesDraggable: false, panOnDrag: false, selectionOnDrag: true, edgesUpdatable: false }
+    case 'waypoint':
+      return { nodesDraggable: false, panOnDrag: true, selectionOnDrag: false, edgesUpdatable: false }
+    case 'cursor':
+    default:
+      return { nodesDraggable: true, panOnDrag: true, selectionOnDrag: false, edgesUpdatable: true }
+  }
+})
 
 // Provide patch callbacks so descendant custom nodes can emit inline edits
 // without having to bubble events through Vue Flow internals.
@@ -56,8 +76,10 @@ const {
   onEdgeUpdateStart,
   onEdgeUpdateEnd,
   onEdgesChange,
+  onEdgeClick,
   fitView,
   updateNodeInternals,
+  project,
   nodes: vfNodes,
 } = useVueFlow()
 
@@ -165,6 +187,20 @@ onEdgesChange((changes) => {
     }
   }
 })
+
+// In waypoint mode, clicking an edge inserts a junction at the click point.
+onEdgeClick(({ edge, event }) => {
+  if (props.tool !== 'waypoint') return
+  const me = event as MouseEvent
+  let flowX = 0
+  let flowY = 0
+  if (typeof project === 'function') {
+    const p = project({ x: me.clientX, y: me.clientY })
+    flowX = p.x
+    flowY = p.y
+  }
+  emit('edge-waypoint', { edgeId: edge.id, flowX, flowY })
+})
 </script>
 
 <template>
@@ -177,12 +213,16 @@ onEdgesChange((changes) => {
       :min-zoom="0.3"
       :max-zoom="2"
       :default-viewport="{ x: 0, y: 0, zoom: 0.8 }"
-      :nodes-draggable="true"
+      :nodes-draggable="flowMode.nodesDraggable"
       :nodes-connectable="true"
-      :edges-updatable="true"
+      :edges-updatable="flowMode.edgesUpdatable"
+      :pan-on-drag="flowMode.panOnDrag"
+      :selection-on-drag="flowMode.selectionOnDrag"
       :delete-key-code="['Delete', 'Backspace']"
       :elements-selectable="true"
       :select-nodes-on-drag="false"
+      :multi-selection-key-code="['Shift']"
+      :class="`graph-canvas--tool-${props.tool ?? 'cursor'}`"
     >
       <Background
         pattern-color="var(--bg-grid)"
@@ -200,5 +240,22 @@ onEdgesChange((changes) => {
   width: 100%;
   height: 100%;
   background: var(--bg);
+}
+
+/* Cursor hints per tool */
+.graph-canvas :deep(.vue-flow.graph-canvas--tool-move .vue-flow__pane) {
+  cursor: grab;
+}
+.graph-canvas :deep(.vue-flow.graph-canvas--tool-move.dragging .vue-flow__pane) {
+  cursor: grabbing;
+}
+.graph-canvas :deep(.vue-flow.graph-canvas--tool-select .vue-flow__pane) {
+  cursor: crosshair;
+}
+.graph-canvas :deep(.vue-flow.graph-canvas--tool-waypoint .vue-flow__edge-path) {
+  cursor: copy;
+}
+.graph-canvas :deep(.vue-flow.graph-canvas--tool-waypoint .vue-flow__edge) {
+  cursor: copy;
 }
 </style>
