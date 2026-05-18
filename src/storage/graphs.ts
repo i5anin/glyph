@@ -4,6 +4,7 @@
 
 import { vueAppDemo } from '../demo/vueAppDemo'
 import { pfForumDemo } from '../demo/pfForumDemo'
+import { softPfforumDemo } from '../demo/softPfforumDemo'
 
 export interface SavedGraph {
   id: string
@@ -22,9 +23,13 @@ function newId(): string {
   )
 }
 
+// Seed graphs that should always be available — if they're missing from
+// localStorage (e.g. user already had the app installed before they were
+// introduced), we inject them on load.
 function defaultGraphs(): SavedGraph[] {
   return [
     { id: newId(), name: 'pf-forum · модули', yaml: pfForumDemo },
+    { id: newId(), name: 'soft.pfforum · vue (window-globals)', yaml: softPfforumDemo },
     { id: newId(), name: 'Vue app · пример', yaml: vueAppDemo },
   ]
 }
@@ -35,9 +40,19 @@ export function loadGraphs(): { graphs: SavedGraph[]; currentId: string } {
     if (raw) {
       const parsed = JSON.parse(raw) as SavedGraph[]
       if (Array.isArray(parsed) && parsed.length) {
+        // Backfill any new seed graphs that weren't present before.
+        const names = new Set(parsed.map((g) => g.name))
+        let mutated = false
+        for (const seed of defaultGraphs()) {
+          if (!names.has(seed.name)) {
+            parsed.push(seed)
+            mutated = true
+          }
+        }
         const stored = localStorage.getItem(CURRENT_KEY)
         const currentId =
           parsed.find((g) => g.id === stored)?.id ?? parsed[0]!.id
+        if (mutated) persist(parsed, currentId)
         return { graphs: parsed, currentId }
       }
     }

@@ -1,22 +1,28 @@
-// Quick smoke-test: parse the generated DSL with js-yaml, check uniqueness
-// and edge integrity. No Vue Flow involved.
+// Smoke-test: parse a generated DSL .ts module with js-yaml,
+// check uniqueness of node/row ids and edge integrity.
+// Usage:  node tools/verify-dsl.mjs [path/to/demo.ts]
 import yaml from '../../modules-soft__pf-forum/node_modules/js-yaml/dist/js-yaml.mjs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-const tsPath = path.resolve('D:/GitHub/glyph/src/demo/pfForumDemo.ts')
+const tsPath = path.resolve(
+  process.argv[2] || 'D:/GitHub/glyph/src/demo/pfForumDemo.ts',
+)
 const ts = await fs.readFile(tsPath, 'utf8')
-const m = ts.match(/export const pfForumDemo = `([\s\S]*)`\s*$/)
+const m = ts.match(/= `([\s\S]*)`\s*$/)
 if (!m) throw new Error('cannot extract DSL from .ts')
-// undo our escaping
-const dsl = m[1].replace(/\\`/g, '`').replace(/\\\$\{/g, '${').replace(/\\\\/g, '\\')
+
+// undo our escaping order: $-brace, backtick, then backslash
+let dsl = m[1]
+dsl = dsl.replace(/\\\$\{/g, '${')
+dsl = dsl.replace(/\\`/g, '`')
+dsl = dsl.replace(/\\\\/g, '\\')
 
 let doc
 try {
   doc = yaml.load(dsl)
 } catch (e) {
   console.error('YAML parse failed:', e.message)
-  // dump a window
   const lines = dsl.split('\n')
   const at = e.mark?.line ?? 0
   for (let i = Math.max(0, at - 3); i < Math.min(lines.length, at + 4); i++) {
@@ -60,4 +66,6 @@ for (const e of edges) {
   }
 }
 
-console.log(`nodes=${nodes.length} edges=${edges.length} groups=${groups.length} dupes=${dupe} dangling=${dangling}`)
+console.log(
+  `nodes=${nodes.length} edges=${edges.length} groups=${groups.length} dupes=${dupe} dangling=${dangling}`,
+)
