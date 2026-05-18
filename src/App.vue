@@ -7,11 +7,11 @@ import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
 import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
 import type { NodeSpec, ObstructionDoc } from './dsl/schema'
-import { vueAppDemo } from './demo/vueAppDemo'
+import { pfForumDemo } from './demo/pfForumDemo'
 import GraphCanvas from './components/GraphCanvas.vue'
 import DslEditor from './components/DslEditor.vue'
 
-const dslText = ref(vueAppDemo)
+const dslText = ref(pfForumDemo)
 const error = ref<string | null>(null)
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])

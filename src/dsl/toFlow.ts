@@ -136,49 +136,37 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
       position: { x: box.x, y: box.y },
       data: { ...grp, headerHeight: GROUP_HEADER },
       style: { width: `${box.w}px`, height: `${box.h}px`, zIndex: 0 },
-      selectable: true,
-      draggable: true,
-      dragHandle: '.group-node__header',
+      // groups are pure visual frames — no drag, no select, no edit handles.
+      // pointer-events:none in GroupNode.vue lets canvas pan through them.
+      selectable: false,
+      draggable: false,
+      focusable: false,
     })
   }
 
+  // Children keep absolute canvas positions and are NOT parented to groups.
+  // Groups are pure visual frames — decoupling them from vue-flow's parent/child
+  // model means children can be dragged freely, and the group never traps pan
+  // events on its surface.
   for (const n of doc.nodes) {
     const pos = absPositions.get(n.id)!
-    const groupId = n.group
-    let position = { x: pos.x, y: pos.y }
-    let parentNode: string | undefined
-    if (groupId && groupBox.has(groupId)) {
-      const box = groupBox.get(groupId)!
-      parentNode = groupId
-      position = { x: pos.x - box.x, y: pos.y - box.y }
-    }
     flowNodes.push({
       id: n.id,
       type: 'obstruction',
-      position,
+      position: { x: pos.x, y: pos.y },
       data: n,
       style: { width: `${NODE_WIDTH}px` },
-      ...(parentNode ? { parentNode, extent: 'parent' as const } : {}),
     })
   }
 
   for (const j of junctions) {
     const pos = absPositions.get(j.id)!
-    const groupId = j.group
-    let position = { x: pos.x, y: pos.y }
-    let parentNode: string | undefined
-    if (groupId && groupBox.has(groupId)) {
-      const box = groupBox.get(groupId)!
-      parentNode = groupId
-      position = { x: pos.x - box.x, y: pos.y - box.y }
-    }
     flowNodes.push({
       id: j.id,
       type: 'junction',
-      position,
+      position: { x: pos.x, y: pos.y },
       data: j,
       style: { width: `${JUNCTION_SIZE}px`, height: `${JUNCTION_SIZE}px` },
-      ...(parentNode ? { parentNode, extent: 'parent' as const } : {}),
     })
   }
 
