@@ -116,11 +116,14 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
       maxX = Math.max(maxX, p.x + p.w)
       maxY = Math.max(maxY, p.y + p.h)
     }
+    // user-controlled override wins over the computed bounding box
+    const autoW = maxX - minX + PAD * 2
+    const autoH = maxY - minY + PAD * 2 + GROUP_HEADER
     groupBox.set(grp.id, {
       x: minX - PAD,
       y: minY - PAD - GROUP_HEADER,
-      w: maxX - minX + PAD * 2,
-      h: maxY - minY + PAD * 2 + GROUP_HEADER,
+      w: grp.width ?? autoW,
+      h: grp.height ?? autoH,
     })
   }
 
@@ -136,8 +139,9 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
       position: { x: box.x, y: box.y },
       data: { ...grp, headerHeight: GROUP_HEADER },
       style: { width: `${box.w}px`, height: `${box.h}px`, zIndex: 0 },
-      // groups are pure visual frames — no drag, no select, no edit handles.
-      // pointer-events:none in GroupNode.vue lets canvas pan through them.
+      // group itself can't be dragged or selected through its body — the inner
+      // GroupNode component sets pointer-events:none on the body, and only
+      // exposes the header and the SE resize handle as interactive surfaces.
       selectable: false,
       draggable: false,
       focusable: false,

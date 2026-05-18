@@ -25,6 +25,7 @@ const emit = defineEmits<{
   'edge-remove': [edgeId: string]
   'node-patch': [nodeId: string, patch: Record<string, unknown>]
   'row-patch': [nodeId: string, rowId: string, patch: { label?: string; value?: string }]
+  'group-patch': [groupId: string, patch: Record<string, unknown>]
 }>()
 
 // Provide patch callbacks so descendant custom nodes can emit inline edits
@@ -34,6 +35,9 @@ provide('glyph:nodePatch', (id: string, patch: Record<string, unknown>) => {
 })
 provide('glyph:rowPatch', (nodeId: string, rowId: string, patch: { label?: string; value?: string }) => {
   emit('row-patch', nodeId, rowId, patch)
+})
+provide('glyph:groupPatch', (id: string, patch: Record<string, unknown>) => {
+  emit('group-patch', id, patch)
 })
 
 const nodeTypes = markRaw({

@@ -54,6 +54,11 @@ export interface GroupSpec {
   id: string
   title?: string
   color?: AccentColor
+  // Optional manual size override. If absent, the group is auto-sized to fit
+  // its members (bounding box + padding). When set, the override wins and the
+  // user can resize the frame via the corner handle.
+  width?: number
+  height?: number
 }
 
 export interface ObstructionDoc {

@@ -205,6 +205,16 @@ function onRowPatch(
   applyFromDoc({ ...currentDoc.value, nodes: nextNodes })
 }
 
+// Resize / rename / recolor a group frame.
+function onGroupPatch(groupId: string, patch: Record<string, unknown>) {
+  const groups = currentDoc.value.groups ?? []
+  const idx = groups.findIndex((g) => g.id === groupId)
+  if (idx === -1) return
+  const next = [...groups]
+  next[idx] = { ...next[idx]!, ...patch }
+  applyFromDoc({ ...currentDoc.value, groups: next })
+}
+
 // ─── DSL panel width (draggable) ─────────────────────────
 const DSL_MIN = 220
 const DSL_MAX_FRACTION = 0.7
@@ -301,6 +311,7 @@ function onSplitterPointerUp(ev: PointerEvent) {
         @edge-remove="onEdgeRemove"
         @node-patch="onNodePatch"
         @row-patch="onRowPatch"
+        @group-patch="onGroupPatch"
       />
     </main>
   </div>
