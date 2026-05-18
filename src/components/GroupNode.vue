@@ -11,7 +11,7 @@ const groupPatch = inject<GroupPatchFn>('glyph:groupPatch', () => {})
 
 const props = defineProps<NodeProps<GroupSpec & { headerHeight?: number }>>()
 
-const { viewport } = useVueFlow()
+const { viewport, findNode, updateNode } = useVueFlow()
 
 const colorVar: Record<AccentColor, string> = {
   cyan: 'var(--accent-cyan)',
@@ -92,16 +92,6 @@ const resizing = ref(false)
 const MIN_W = 80
 const MIN_H = 60
 
-function parseTranslate(transform: string): { x: number; y: number } {
-  // vue-flow writes inline "transform: translate(<x>px, <y>px)"
-  const m = transform.match(/translate\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px\)/)
-  if (m) return { x: parseFloat(m[1]!), y: parseFloat(m[2]!) }
-  // some builds emit translate3d
-  const m3 = transform.match(/translate3d\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px/)
-  if (m3) return { x: parseFloat(m3[1]!), y: parseFloat(m3[2]!) }
-  return { x: 0, y: 0 }
-}
-
 function onResizeStart(ev: PointerEvent, dir: Dir) {
   if (ev.button !== 0) return
   ev.preventDefault()
@@ -112,9 +102,13 @@ function onResizeStart(ev: PointerEvent, dir: Dir) {
   if (!wrapper) return
   handle.setPointerCapture(ev.pointerId)
 
+  // Snapshot starting size from the rendered wrapper and position from the
+  // reactive node (vue-flow's source of truth — survives a reactivity round).
+  const node = findNode(props.id)
   const startW = wrapper.offsetWidth
   const startH = wrapper.offsetHeight
-  const { x: startX, y: startY } = parseTranslate(wrapper.style.transform)
+  const startX = node?.position?.x ?? 0
+  const startY = node?.position?.y ?? 0
   const startMouseX = ev.clientX
   const startMouseY = ev.clientY
   const zoom = viewport.value.zoom || 1
@@ -153,11 +147,15 @@ function onResizeStart(ev: PointerEvent, dir: Dir) {
     curH = nH
     curX = nX
     curY = nY
-    wrapper!.style.width = `${nW}px`
-    wrapper!.style.height = `${nH}px`
-    if (dir.w || dir.n) {
-      wrapper!.style.transform = `translate(${nX}px, ${nY}px)`
-    }
+
+    // Push through vue-flow's reactive API — direct DOM mutation of
+    // wrapper.style would be undone on the next reactive flush.
+    const existingStyle =
+      (findNode(props.id)?.style as Record<string, unknown> | undefined) ?? {}
+    updateNode(props.id, {
+      position: { x: nX, y: nY },
+      style: { ...existingStyle, width: `${nW}px`, height: `${nH}px` },
+    })
   }
 
   function onMove(e: PointerEvent) {
