@@ -285,6 +285,7 @@ onBeforeUnmount(() => {
             class="obs-node__row-label nodrag nopan"
             :contenteditable="editing ? 'plaintext-only' : 'false'"
             spellcheck="false"
+            :title="row.label"
             @blur="onRowLabelBlur(row.id, $event)"
             @keydown="onEnterBlur"
             @mousedown.stop
@@ -294,6 +295,7 @@ onBeforeUnmount(() => {
             class="obs-node__row-value nodrag nopan"
             :contenteditable="editing ? 'plaintext-only' : 'false'"
             spellcheck="false"
+            :title="String(row.value)"
             @blur="onRowValueBlur(row.id, $event)"
             @keydown="onEnterBlur"
             @mousedown.stop

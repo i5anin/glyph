@@ -195,6 +195,12 @@ function expandAll() {
   collapsedNodes.value = new Set()
 }
 
+// Card-list click → pan + zoom the graph to that node.
+const graphCanvas = ref<{ focusNode: (id: string) => void } | null>(null)
+function onCardFocus(id: string) {
+  graphCanvas.value?.focusNode(id)
+}
+
 function onPickerRemove(id: string) {
   if (graphs.value.length <= 1) return
   const idx = graphs.value.findIndex((g) => g.id === id)
@@ -394,6 +400,9 @@ function onSplitterPointerUp(ev: PointerEvent) {
         <CardsListView
           v-else
           :doc="currentDoc"
+          @focus-node="onCardFocus"
+          @collapse-all="collapseAll"
+          @expand-all="expandAll"
         />
       </div>
       <div
@@ -407,6 +416,7 @@ function onSplitterPointerUp(ev: PointerEvent) {
         title="Тяни, чтобы изменить ширину · двойной клик — свернуть/раскрыть"
       ></div>
       <GraphCanvas
+        ref="graphCanvas"
         :nodes="nodes"
         :edges="edges"
         @connect="onConnect"

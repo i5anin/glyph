@@ -77,8 +77,22 @@ const {
   onEdgesChange,
   fitView,
   updateNodeInternals,
+  setCenter,
+  findNode,
   nodes: vfNodes,
 } = useVueFlow()
+
+// Pan + zoom the canvas to a specific node, called from CardsListView when
+// the user clicks a card in the left panel.
+function focusNode(id: string) {
+  const n = findNode(id)
+  if (!n) return
+  const x = (n.position?.x ?? 0) + (n.dimensions?.width ?? 240) / 2
+  const y = (n.position?.y ?? 0) + (n.dimensions?.height ?? 100) / 2
+  setCenter(x, y, { zoom: 1.1, duration: 500 })
+}
+
+defineExpose({ focusNode })
 
 const rootEl = ref<HTMLDivElement | null>(null)
 

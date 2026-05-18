@@ -8,7 +8,10 @@ const HEADER_HEIGHT = 42
 const PROGRESS_HEIGHT = 48
 const FOOTER_HEIGHT = 48
 const JUNCTION_SIZE = 16
-const GROUP_PADDING = 24
+// Generous padding so that node handles (which protrude outside the node's
+// bounding rect via their own width and glow) don't touch the group's dashed
+// border. Was 24, screenshots showed handles overlapping the frame.
+const GROUP_PADDING = 48
 const GROUP_HEADER = 32
 
 function estimateHeight(node: NodeSpec): number {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, inject, ref, type Ref } from 'vue'
 import {
   AppWindow,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Cloud,
   Database,
   FileText,
@@ -15,6 +17,16 @@ import type { ObstructionDoc, NodeSpec, GroupSpec, AccentColor } from '../dsl/sc
 const props = defineProps<{
   doc: ObstructionDoc
 }>()
+
+const emit = defineEmits<{
+  'focus-node': [id: string]
+  'collapse-all': []
+  'expand-all': []
+}>()
+
+// Mirror graph-side collapse state — collapsed cards show only the title row
+// (no function list), staying in sync with the graph.
+const collapsedSet = inject<Ref<Set<string>>>('glyph:collapsedNodes')
 
 const search = ref('')
 
@@ -118,6 +130,14 @@ function toggleGroup(id: string) {
 function clearSearch() {
   search.value = ''
 }
+
+function isCardCollapsed(n: NodeSpec): boolean {
+  return collapsedSet?.value.has(n.id) ?? false
+}
+
+function onCardClick(n: NodeSpec) {
+  emit('focus-node', n.id)
+}
 </script>
 
 <template>
@@ -139,6 +159,22 @@ function clearSearch() {
         @click="clearSearch"
       >
         <X :size="11" :stroke-width="2" />
+      </button>
+      <button
+        class="cards-list__bulk-btn"
+        type="button"
+        title="Свернуть все карточки"
+        @click="emit('collapse-all')"
+      >
+        <ChevronsDownUp :size="12" :stroke-width="2" />
+      </button>
+      <button
+        class="cards-list__bulk-btn"
+        type="button"
+        title="Развернуть все карточки"
+        @click="emit('expand-all')"
+      >
+        <ChevronsUpDown :size="12" :stroke-width="2" />
       </button>
     </div>
 
@@ -166,7 +202,10 @@ function clearSearch() {
             v-for="n in nodes"
             :key="n.id"
             class="cards-list__card"
+            :class="{ 'cards-list__card--collapsed': isCardCollapsed(n) }"
             :style="{ '--cc': colorVar[nodeColor(n)] }"
+            :title="`Перейти к ${n.title} в графе`"
+            @click="onCardClick(n)"
           >
             <div class="cards-list__card-head">
               <component
@@ -175,7 +214,7 @@ function clearSearch() {
                 :stroke-width="2"
                 class="cards-list__card-icon"
               />
-              <span class="cards-list__card-title">{{ n.title }}</span>
+              <span class="cards-list__card-title" :title="n.title">{{ n.title }}</span>
               <span class="cards-list__card-stats">
                 <span class="cards-list__stat" title="imported by">
                   ←{{ degree.inc.get(n.id) ?? 0 }}
@@ -186,10 +225,14 @@ function clearSearch() {
               </span>
             </div>
             <ul
-              v-if="functionRows(n).length"
+              v-if="functionRows(n).length && !isCardCollapsed(n)"
               class="cards-list__card-fns"
             >
-              <li v-for="r in functionRows(n)" :key="r.id">{{ r.label }}</li>
+              <li
+                v-for="r in functionRows(n)"
+                :key="r.id"
+                :title="r.label"
+              >{{ r.label }}</li>
             </ul>
           </div>
         </template>
@@ -243,22 +286,34 @@ function clearSearch() {
   color: var(--text-faint);
 }
 
-.cards-list__search-clear {
+.cards-list__search-clear,
+.cards-list__bulk-btn {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 3px;
   color: var(--text-faint);
   cursor: pointer;
   padding: 0;
+  flex-shrink: 0;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
 
 .cards-list__search-clear:hover {
   color: var(--accent-magenta);
   border-color: var(--accent-magenta);
+}
+
+.cards-list__bulk-btn:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.08);
 }
 
 /* ── Scroll area ──────────────────────────────────────────── */
@@ -318,11 +373,17 @@ function clearSearch() {
   background: var(--node-bg-elev);
   border-left: 3px solid var(--cc);
   border-radius: 3px;
-  transition: background 0.12s;
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
 }
 
 .cards-list__card:hover {
   background: var(--node-row-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cc) 50%, transparent);
+}
+
+.cards-list__card--collapsed {
+  opacity: 0.85;
 }
 
 .cards-list__card-head {
