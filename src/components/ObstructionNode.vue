@@ -234,6 +234,19 @@ onBeforeUnmount(() => {
       >
         <component :is="collapsed ? ChevronRight : ChevronDown" :size="13" :stroke-width="2.2" />
       </button>
+      <component :is="iconFor(node.icon)" :size="16" :stroke-width="2" class="obs-node__header-icon" />
+      <span
+        class="obs-node__title nodrag nopan"
+        :contenteditable="editing ? 'plaintext-only' : 'false'"
+        spellcheck="false"
+        :title="editing ? 'Enter — сохранить, Esc — выйти из правки' : node.title"
+        @blur="onTitleBlur"
+        @keydown="onEnterBlur"
+        @mousedown.stop
+      >{{ node.title }}</span>
+      <span v-if="collapsed && hiddenRowCount > 0" class="obs-node__collapsed-badge">
+        +{{ hiddenRowCount }}
+      </span>
       <button
         class="obs-node__cascade-btn nodrag nopan"
         type="button"
@@ -243,19 +256,6 @@ onBeforeUnmount(() => {
       >
         <component :is="collapsed ? ChevronsRight : ChevronsDown" :size="13" :stroke-width="2.2" />
       </button>
-      <component :is="iconFor(node.icon)" :size="16" :stroke-width="2" class="obs-node__header-icon" />
-      <span
-        class="obs-node__title nodrag nopan"
-        :contenteditable="editing ? 'plaintext-only' : 'false'"
-        spellcheck="false"
-        :title="editing ? 'Enter — сохранить, Esc — выйти из правки' : ''"
-        @blur="onTitleBlur"
-        @keydown="onEnterBlur"
-        @mousedown.stop
-      >{{ node.title }}</span>
-      <span v-if="collapsed && hiddenRowCount > 0" class="obs-node__collapsed-badge">
-        +{{ hiddenRowCount }}
-      </span>
       <button
         class="obs-node__edit-btn nodrag nopan"
         type="button"
@@ -454,10 +454,24 @@ onBeforeUnmount(() => {
   background: rgba(79, 209, 255, 0.08);
 }
 
-/* Cascade chevron — tints orange so two actions are visually distinguishable */
+/* Cascade chevron — appears on hover on the RIGHT side of the header so the
+   solo chevron and the title get more room. Orange so its action is visually
+   distinct from the solo (cyan) chevron and the pencil (cyan) edit button. */
 .obs-node__cascade-btn {
+  opacity: 0;
+  transform: translateY(-1px);
   color: var(--text-faint);
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
+
+.obs-node:hover .obs-node__cascade-btn {
+  opacity: 1;
+}
+
 .obs-node__cascade-btn:hover {
   color: var(--accent-orange);
   border-color: var(--accent-orange);
