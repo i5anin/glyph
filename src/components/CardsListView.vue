@@ -1,0 +1,395 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import {
+  AppWindow,
+  Cloud,
+  Database,
+  FileText,
+  Search,
+  X,
+  CircleDot,
+  type LucideIcon,
+} from 'lucide-vue-next'
+import type { ObstructionDoc, NodeSpec, GroupSpec, AccentColor } from '../dsl/schema'
+
+const props = defineProps<{
+  doc: ObstructionDoc
+}>()
+
+const search = ref('')
+
+const iconMap: Record<string, LucideIcon> = {
+  'app-window': AppWindow,
+  cloud: Cloud,
+  database: Database,
+  'file-text': FileText,
+}
+
+function iconFor(name: string | undefined): LucideIcon {
+  if (!name) return CircleDot
+  return iconMap[name] ?? CircleDot
+}
+
+const colorVar: Record<AccentColor, string> = {
+  cyan: 'var(--accent-cyan)',
+  green: 'var(--accent-green)',
+  magenta: 'var(--accent-magenta)',
+  orange: 'var(--accent-orange)',
+  yellow: 'var(--accent-yellow)',
+  gray: 'var(--accent-gray)',
+}
+
+const groupSpecs = computed(() => {
+  const map = new Map<string, GroupSpec>()
+  for (const g of props.doc.groups ?? []) map.set(g.id, g)
+  return map
+})
+
+// Build "node id → { incoming, outgoing }" once
+const degree = computed(() => {
+  const inc = new Map<string, number>()
+  const out = new Map<string, number>()
+  for (const e of props.doc.edges) {
+    const f = e.from.split('.')[0]
+    const t = e.to.split('.')[0]
+    if (f) out.set(f, (out.get(f) ?? 0) + 1)
+    if (t) inc.set(t, (inc.get(t) ?? 0) + 1)
+  }
+  return { inc, out }
+})
+
+// Pick the dominant color of a node (skip in/deps boilerplate rows)
+function nodeColor(n: NodeSpec): AccentColor {
+  for (const r of n.rows ?? []) {
+    if (r.id === 'in' || r.id === 'deps') continue
+    if (r.color) return r.color
+  }
+  return n.rows?.[0]?.color ?? 'cyan'
+}
+
+function functionRows(n: NodeSpec) {
+  return (n.rows ?? []).filter((r) => r.id !== 'in' && r.id !== 'deps')
+}
+
+// Group nodes by their `group` field. Keep ordering: doc.groups order, then
+// any ungrouped nodes go to a synthetic "_ungrouped" bucket at the end.
+const groupedNodes = computed(() => {
+  const order: string[] = (props.doc.groups ?? []).map((g) => g.id)
+  const map = new Map<string, NodeSpec[]>()
+  for (const id of order) map.set(id, [])
+  map.set('_ungrouped', [])
+  for (const n of props.doc.nodes) {
+    const key = n.group && map.has(n.group) ? n.group : '_ungrouped'
+    map.get(key)!.push(n)
+  }
+  return map
+})
+
+const filteredGroups = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return groupedNodes.value
+  const result = new Map<string, NodeSpec[]>()
+  for (const [g, nodes] of groupedNodes.value) {
+    const filtered = nodes.filter((n) => {
+      if (n.title.toLowerCase().includes(q)) return true
+      if (n.id.toLowerCase().includes(q)) return true
+      return (n.rows ?? []).some((r) => r.label.toLowerCase().includes(q))
+    })
+    if (filtered.length) result.set(g, filtered)
+  }
+  return result
+})
+
+const totalShown = computed(() => {
+  let n = 0
+  for (const list of filteredGroups.value.values()) n += list.length
+  return n
+})
+
+// Collapse/expand groups
+const collapsedGroups = ref<Set<string>>(new Set())
+function toggleGroup(id: string) {
+  const next = new Set(collapsedGroups.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  collapsedGroups.value = next
+}
+
+function clearSearch() {
+  search.value = ''
+}
+</script>
+
+<template>
+  <div class="cards-list">
+    <div class="cards-list__search">
+      <Search :size="13" :stroke-width="2" class="cards-list__search-icon" />
+      <input
+        v-model="search"
+        type="text"
+        spellcheck="false"
+        placeholder="Поиск по имени или функции…"
+        class="cards-list__search-input"
+      />
+      <button
+        v-if="search"
+        class="cards-list__search-clear"
+        type="button"
+        title="Очистить"
+        @click="clearSearch"
+      >
+        <X :size="11" :stroke-width="2" />
+      </button>
+    </div>
+
+    <div class="cards-list__scroll">
+      <template v-for="[groupId, nodes] in filteredGroups" :key="groupId">
+        <div
+          v-if="nodes.length"
+          class="cards-list__group-head"
+          @click="toggleGroup(groupId)"
+        >
+          <span
+            class="cards-list__group-marker"
+            :style="{
+              background: colorVar[(groupSpecs.get(groupId)?.color ?? 'gray')],
+            }"
+          />
+          <span class="cards-list__group-name">
+            {{ groupSpecs.get(groupId)?.title ?? (groupId === '_ungrouped' ? 'без группы' : groupId) }}
+          </span>
+          <span class="cards-list__group-count">{{ nodes.length }}</span>
+        </div>
+
+        <template v-if="!collapsedGroups.has(groupId)">
+          <div
+            v-for="n in nodes"
+            :key="n.id"
+            class="cards-list__card"
+            :style="{ '--cc': colorVar[nodeColor(n)] }"
+          >
+            <div class="cards-list__card-head">
+              <component
+                :is="iconFor(n.icon)"
+                :size="13"
+                :stroke-width="2"
+                class="cards-list__card-icon"
+              />
+              <span class="cards-list__card-title">{{ n.title }}</span>
+              <span class="cards-list__card-stats">
+                <span class="cards-list__stat" title="imported by">
+                  ←{{ degree.inc.get(n.id) ?? 0 }}
+                </span>
+                <span class="cards-list__stat" title="uses">
+                  {{ degree.out.get(n.id) ?? 0 }}→
+                </span>
+              </span>
+            </div>
+            <ul
+              v-if="functionRows(n).length"
+              class="cards-list__card-fns"
+            >
+              <li v-for="r in functionRows(n)" :key="r.id">{{ r.label }}</li>
+            </ul>
+          </div>
+        </template>
+      </template>
+
+      <div v-if="!totalShown" class="cards-list__empty">
+        Ничего не нашлось
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.cards-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--node-bg);
+  overflow: hidden;
+}
+
+/* ── Search ───────────────────────────────────────────────── */
+.cards-list__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--node-bg);
+  border-bottom: 1px solid var(--node-divider);
+  flex-shrink: 0;
+}
+
+.cards-list__search-icon {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.cards-list__search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.cards-list__search-input::placeholder {
+  color: var(--text-faint);
+}
+
+.cards-list__search-clear {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+}
+
+.cards-list__search-clear:hover {
+  color: var(--accent-magenta);
+  border-color: var(--accent-magenta);
+}
+
+/* ── Scroll area ──────────────────────────────────────────── */
+.cards-list__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 10px;
+}
+
+.cards-list__group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cards-list__group-head:hover {
+  color: var(--text);
+}
+
+.cards-list__group-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+
+.cards-list__group-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cards-list__group-count {
+  background: var(--node-bg-elev);
+  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* ── Card ─────────────────────────────────────────────────── */
+.cards-list__card {
+  margin: 2px 10px;
+  padding: 5px 8px;
+  background: var(--node-bg-elev);
+  border-left: 3px solid var(--cc);
+  border-radius: 3px;
+  transition: background 0.12s;
+}
+
+.cards-list__card:hover {
+  background: var(--node-row-hover);
+}
+
+.cards-list__card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cards-list__card-icon {
+  color: var(--cc);
+  filter: drop-shadow(0 0 3px var(--cc));
+  flex-shrink: 0;
+}
+
+.cards-list__card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cards-list__card-stats {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cards-list__stat {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cards-list__card-fns {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 19px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cards-list__card-fns li {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.cards-list__card-fns li::before {
+  content: '· ';
+  color: var(--cc);
+}
+
+.cards-list__empty {
+  text-align: center;
+  padding: 32px 14px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+</style>

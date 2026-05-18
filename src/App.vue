@@ -2,7 +2,7 @@
 import { computed, provide, ref, shallowRef, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import type { Connection, Edge, Node } from '@vue-flow/core'
-import { PanelLeft } from 'lucide-vue-next'
+import { ChevronLeft, PanelLeft } from 'lucide-vue-next'
 import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
 import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
@@ -17,6 +17,15 @@ import {
 import GraphCanvas from './components/GraphCanvas.vue'
 import DslEditor from './components/DslEditor.vue'
 import GraphPicker from './components/GraphPicker.vue'
+import CardsListView from './components/CardsListView.vue'
+
+// ─── Left-panel display mode (persisted) ─────────────────────────────────
+type LeftMode = 'yaml' | 'cards'
+const LEFT_MODE_KEY = 'glyph:left-mode'
+const leftMode = ref<LeftMode>(
+  (localStorage.getItem(LEFT_MODE_KEY) as LeftMode) ?? 'yaml',
+)
+watch(leftMode, (v) => localStorage.setItem(LEFT_MODE_KEY, v))
 
 // ─── Saved-graphs storage ───────────────────────────────────────────────
 const initial = loadGraphs()
@@ -348,7 +357,45 @@ function onSplitterPointerUp(ev: PointerEvent) {
       class="app__main"
       :style="{ gridTemplateColumns: `${dslWidth}px 6px 1fr` }"
     >
-      <DslEditor v-model="dslText" :error="error" @collapse="toggleDsl" />
+      <div class="app__left">
+        <div class="app__left-tabs">
+          <button
+            class="app__left-tab"
+            :class="{ 'app__left-tab--active': leftMode === 'yaml' }"
+            type="button"
+            @click="leftMode = 'yaml'"
+          >YAML</button>
+          <button
+            class="app__left-tab"
+            :class="{ 'app__left-tab--active': leftMode === 'cards' }"
+            type="button"
+            @click="leftMode = 'cards'"
+          >Карточки</button>
+          <span class="app__left-tabs-spacer" />
+          <span
+            v-if="leftMode === 'yaml'"
+            class="app__left-status"
+            :class="error ? 'app__left-status--err' : 'app__left-status--ok'"
+          >● {{ error ? 'error' : 'live' }}</span>
+          <button
+            class="app__left-collapse"
+            type="button"
+            title="Скрыть панель"
+            @click="toggleDsl"
+          >
+            <ChevronLeft :size="13" :stroke-width="2.2" />
+          </button>
+        </div>
+        <DslEditor
+          v-if="leftMode === 'yaml'"
+          v-model="dslText"
+          :error="error"
+        />
+        <CardsListView
+          v-else
+          :doc="currentDoc"
+        />
+      </div>
       <div
         class="app__splitter"
         :class="{ 'app__splitter--collapsed': dslCollapsed }"
@@ -457,6 +504,101 @@ function onSplitterPointerUp(ev: PointerEvent) {
   display: grid;
   /* columns set inline via :style — dsl | splitter | graph */
   min-height: 0;
+}
+
+/* ── Left panel (tabs + content) ─────────────────────────── */
+.app__left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--node-bg);
+  border-right: 1px solid var(--node-border);
+  overflow: hidden;
+}
+
+.app__left-tabs {
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  background: var(--node-header-bg);
+  border-bottom: 1px solid var(--node-divider);
+  flex-shrink: 0;
+  padding-right: 6px;
+}
+
+.app__left-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0 14px;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.app__left-tab:hover {
+  color: var(--text);
+  background: rgba(79, 209, 255, 0.04);
+}
+
+.app__left-tab--active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.06);
+}
+
+.app__left-tabs-spacer {
+  flex: 1;
+}
+
+.app__left-status {
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin-right: 8px;
+}
+
+.app__left-status--ok {
+  color: var(--accent-green);
+  text-shadow: 0 0 6px var(--accent-green);
+}
+
+.app__left-status--err {
+  color: var(--accent-magenta);
+  text-shadow: 0 0 6px var(--accent-magenta);
+}
+
+.app__left-collapse {
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: 1px solid var(--node-divider);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+
+.app__left-collapse:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.08);
 }
 
 .app__splitter {
