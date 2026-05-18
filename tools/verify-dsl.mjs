@@ -34,15 +34,23 @@ try {
 const nodes = doc.nodes || []
 const edges = doc.edges || []
 const groups = doc.groups || []
+const junctions = doc.junctions || []
 
 const ids = new Set()
+const groupIds = new Set(groups.map((g) => g.id))
 let dupe = 0
+let badGroupRef = 0
+
 for (const n of nodes) {
   if (ids.has(n.id)) {
     dupe++
     console.error('DUP node id', n.id)
   }
   ids.add(n.id)
+  if (n.group && !groupIds.has(n.group)) {
+    badGroupRef++
+    console.error(`node "${n.id}".group references unknown group "${n.group}"`)
+  }
   if (n.rows) {
     const rids = new Set()
     for (const r of n.rows) {
@@ -51,21 +59,30 @@ for (const n of nodes) {
     }
   }
 }
+for (const j of junctions) {
+  if (j.group && !groupIds.has(j.group)) {
+    badGroupRef++
+    console.error(`junction "${j.id}".group references unknown group "${j.group}"`)
+  }
+}
 
+const endpointIds = new Set([...ids, ...junctions.map((j) => j.id)])
 let dangling = 0
 for (const e of edges) {
   const [f] = e.from.split('.')
   const [t] = e.to.split('.')
-  if (!ids.has(f)) {
+  if (!endpointIds.has(f)) {
     dangling++
     console.error('edge.from unknown:', e.from)
   }
-  if (!ids.has(t)) {
+  if (!endpointIds.has(t)) {
     dangling++
     console.error('edge.to unknown:', e.to)
   }
 }
 
+const ok = dupe === 0 && dangling === 0 && badGroupRef === 0
 console.log(
-  `nodes=${nodes.length} edges=${edges.length} groups=${groups.length} dupes=${dupe} dangling=${dangling}`,
+  `nodes=${nodes.length} edges=${edges.length} groups=${groups.length} dupes=${dupe} dangling=${dangling} badGroupRef=${badGroupRef}`,
 )
+if (!ok) process.exit(1)

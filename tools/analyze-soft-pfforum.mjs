@@ -39,7 +39,13 @@ function topLayer(rel) {
     (s) => s && s !== 'dist' && s !== 'js' && s !== 'vue',
   )
   if (trimmed.length <= 1) return 'misc' // file directly under dist/js/vue
-  if (trimmed[0] === 'shared') return `shared/${trimmed[1]}`.replace(/\/$/, '')
+  if (trimmed[0] === 'shared') {
+    // shared/<subdir>/<file>  →  shared/<subdir>
+    // shared/<file>           →  just "shared"  (was previously treated as
+    //                            shared/<file>, producing a phantom group)
+    if (trimmed.length >= 3) return `shared/${trimmed[1]}`
+    return 'shared'
+  }
   return trimmed[0]
 }
 

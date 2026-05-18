@@ -13,6 +13,7 @@ groups:
   - { id: shared_api, title: shared · API, color: magenta }
   - { id: shared_lib, title: shared · lib, color: magenta }
   - { id: shared_stores, title: shared · stores, color: magenta }
+  - { id: shared, title: shared, color: magenta }
   - { id: misc, title: misc, color: magenta }
   - { id: library, title: plugins/vue · libraries, color: yellow }
 
@@ -216,7 +217,7 @@ nodes:
   - id: dist_js_vue_shared_routes_js
     title: routes.js
     icon: file-text
-    group: shared_routes_js
+    group: shared
     rows:
       - { id: in, icon: download, label: used by, value: 4, color: magenta, type: target }
       - { id: deps, icon: upload, label: uses, value: 0, color: magenta, type: source }
