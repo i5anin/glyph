@@ -32,6 +32,24 @@ const { findNode, viewport } = useVueFlow()
 // to smoothstep, which always adapts to the current handle.
 const collapsedSet = inject<Ref<Set<string>>>('glyph:collapsedNodes')
 
+// ─── Hover highlight ────────────────────────────────────────────────────
+// Читаем общий Set «активных id». Ребро яркое только если ОБА его конца
+// в активе (для node-hover так получаются ребра-к-соседям, для edge-hover —
+// само наведённое ребро). На pointerenter регистрируем своё ребро как
+// активное, на leave — гасим с дебаунсом (анти-флик при движении мыши
+// по сильно изгибающимся путям).
+const highlightedIds = inject<Ref<Set<string> | null>>('glyph:highlightedIds')
+const setHighlight = inject<(s: Set<string>) => void>('glyph:setHighlight')
+const clearHighlight = inject<() => void>('glyph:clearHighlight')
+
+const isOnHover = computed(() => {
+  const set = highlightedIds?.value
+  if (!set) return null
+  return set.has(props.source) && set.has(props.target)
+})
+const isDimmed = computed(() => isOnHover.value === false)
+const isLinked = computed(() => isOnHover.value === true)
+
 const bendsAreFresh = computed(() => {
   const bends = props.data?.bends
   if (!bends || bends.length === 0) return false
@@ -137,6 +155,8 @@ function onEnter(ev: PointerEvent) {
   hovered.value = true
   mouseX.value = ev.clientX
   mouseY.value = ev.clientY
+  // Регистрируем подсветку: оба конца этого ребра становятся «активными»
+  setHighlight?.(new Set([props.source, props.target]))
 }
 function onMove(ev: PointerEvent) {
   mouseX.value = ev.clientX
@@ -144,12 +164,14 @@ function onMove(ev: PointerEvent) {
 }
 function onLeave() {
   hovered.value = false
+  clearHighlight?.()
 }
 </script>
 
 <template>
   <g
     class="flow-edge"
+    :class="{ 'flow-edge--dim': isDimmed, 'flow-edge--linked': isLinked }"
     @pointerenter="onEnter"
     @pointermove="onMove"
     @pointerleave="onLeave"
@@ -162,7 +184,7 @@ function onLeave() {
       class="flow-edge__hit"
       :d="path[0]"
       stroke="transparent"
-      stroke-width="18"
+      stroke-width="28"
       fill="none"
     />
     <path
@@ -219,6 +241,17 @@ function onLeave() {
 </template>
 
 <style>
+.flow-edge {
+  transition: opacity 0.15s ease;
+}
+
+/* Hover-связка: ребро касается наведённой ноды — подсветить и усилить */
+.flow-edge--linked .flow-edge__line { stroke-width: 3; }
+.flow-edge--linked .flow-edge__halo { opacity: 0.4; }
+
+/* Hover-связка: ребро не имеет отношения — приглушить */
+.flow-edge--dim { opacity: 0.18; }
+
 .flow-edge__hit {
   pointer-events: stroke;
   cursor: pointer;

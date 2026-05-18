@@ -36,6 +36,7 @@ const emit = defineEmits<{
   'collapse-all': []
   'expand-all': []
   relayout: []
+  optimize: []
 }>()
 
 // Provide patch callbacks so descendant custom nodes can emit inline edits
@@ -76,6 +77,7 @@ const {
   onEdgeUpdateStart,
   onEdgeUpdateEnd,
   onEdgesChange,
+  onNodeDragStop,
   fitView,
   updateNodeInternals,
   setCenter,
@@ -83,13 +85,68 @@ const {
   nodes: vfNodes,
 } = useVueFlow()
 
+// When a group-container finishes dragging — persist its new x/y back into
+// the doc via groupPatch, so the next ELK pass keeps the user-chosen spot
+// (and children stay with it because they're parented to this group).
+onNodeDragStop(({ node }) => {
+  if (node.type !== 'group-container') return
+  emit('group-patch', node.id, {
+    x: Math.round(node.position?.x ?? 0),
+    y: Math.round(node.position?.y ?? 0),
+  })
+})
+
+// User-initiated full-graph rebuilds: relayout / optimize.
+// Граф массово переезжает — камера обязана последовать. Взводим pendingFit
+// перед эмитом, чтобы onNodesInitialized после ELK заметил флаг и сделал
+// fit-view. Доп. setTimeout-фолбэк: если ELK не изменил размеры нод и
+// onNodesInitialized не выстрелит — всё равно фитим через 600ms.
+function onRelayoutClick() {
+  pendingFit = true
+  emit('relayout')
+  setTimeout(() => {
+    if (pendingFit) {
+      pendingFit = false
+      runFit()
+    }
+  }, 600)
+}
+function onOptimizeClick() {
+  pendingFit = true
+  emit('optimize')
+  // Оптимизация может занимать секунды — даём фолбэку больше времени.
+  setTimeout(() => {
+    if (pendingFit) {
+      pendingFit = false
+      runFit()
+    }
+  }, 3500)
+}
+
 // Pan + zoom the canvas to a specific node, called from CardsListView when
 // the user clicks a card in the left panel.
+//
+// IMPORTANT: ноды внутри group-container'а хранят position ОТНОСИТЕЛЬНО
+// родителя (мы сами выставляем parentNode + relative pos в toFlow). Поэтому
+// для центрирования камеры нужно сначала собрать АБСОЛЮТНУЮ позицию через
+// цепочку parentNode → parent → …
 function focusNode(id: string) {
   const n = findNode(id)
   if (!n) return
-  const x = (n.position?.x ?? 0) + (n.dimensions?.width ?? 240) / 2
-  const y = (n.position?.y ?? 0) + (n.dimensions?.height ?? 100) / 2
+
+  let absX = n.position?.x ?? 0
+  let absY = n.position?.y ?? 0
+  let parentId: string | undefined = (n as { parentNode?: string }).parentNode
+  while (parentId) {
+    const p = findNode(parentId)
+    if (!p) break
+    absX += p.position?.x ?? 0
+    absY += p.position?.y ?? 0
+    parentId = (p as { parentNode?: string }).parentNode
+  }
+
+  const x = absX + (n.dimensions?.width ?? 240) / 2
+  const y = absY + (n.dimensions?.height ?? 100) / 2
   setCenter(x, y, { zoom: 1.1, duration: 500 })
 }
 
@@ -109,15 +166,38 @@ function runFit() {
   )
 }
 
-onNodesInitialized(runFit)
+// Vue Flow вызывает onNodesInitialized каждый раз, когда меняются размеры
+// нод — а это происходит на КАЖДЫЙ collapse/expand (мы дергаем
+// updateNodeInternals из ObstructionNode). Если делать fitView каждый раз,
+// камера улетает и пользователю кажется что весь граф «перерасставился».
+// Поэтому фитим только ОДИН раз — при первой инициализации, ИЛИ когда
+// pendingFit взведён извне (после relayout/optimize, где граф массово
+// переезжает и камеру нужно навести на новый центр).
+let initialFitDone = false
+let pendingFit = false
+onNodesInitialized(() => {
+  if (pendingFit) {
+    pendingFit = false
+    runFit()
+    return
+  }
+  if (initialFitDone) return
+  initialFitDone = true
+  runFit()
+})
 
-// When the node set changes (e.g. DSL edit) — give Vue Flow a moment, then fit.
+// When the set of node IDs changes (DSL edit / graph switch — NOT collapse,
+// which keeps the same ids) — re-arm the initial-fit flag and refit once.
 watch(
   () => props.nodes.map((n) => n.id).join('|'),
   () => {
+    initialFitDone = false
     setTimeout(() => {
       refreshAll()
-      runFit()
+      if (!initialFitDone) {
+        initialFitDone = true
+        runFit()
+      }
     }, 80)
   },
 )
@@ -238,7 +318,8 @@ onEdgesChange((changes) => {
       :perf="perfMode"
       @collapse-all="emit('collapse-all')"
       @expand-all="emit('expand-all')"
-      @relayout="emit('relayout')"
+      @relayout="onRelayoutClick"
+      @optimize="onOptimizeClick"
     />
   </div>
 </template>

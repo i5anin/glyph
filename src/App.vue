@@ -44,6 +44,89 @@ const edges = shallowRef<Edge[]>([])
 // current canonical doc — single source of truth. Updated from either side.
 const currentDoc = shallowRef<ObstructionDoc>({ nodes: [], edges: [] })
 
+// ─── Centralized collapse state ──────────────────────────────────────────
+// Declared up here (not next to its toggle helpers below) because applyFromDsl
+// is invoked synchronously at script-setup time (line ~90) and references this
+// ref — keeping the declaration below would hit TDZ.
+const collapsedNodes = ref<Set<string>>(new Set())
+provide('glyph:collapsedNodes', collapsedNodes)
+
+// ─── Hover highlight state ───────────────────────────────────────────────
+// Единый источник правды для подсветки — Set из node-id, которые сейчас
+// «активны» (наведены прямо или связаны с наведённым ребром/нодой).
+//
+// Ставит ObstructionNode (на pointerenter) — set = self + 1-hop neighbours.
+// Ставит FlowEdge (на pointerenter) — set = {source, target}.
+// Чистится с задержкой (см. createHoverController), чтобы не моргало когда
+// курсор кратко проскальзывает между картой и hit-area соседнего ребра.
+const highlightedIds = ref<Set<string> | null>(null)
+provide('glyph:highlightedIds', highlightedIds)
+
+// Глобальный leave-таймер (ОДИН на всё приложение, а не по инстансу).
+// Когда курсор перепрыгивает с одной карточки на другую, leave первой
+// карточки запускает таймер на 140ms — НО enter второй карточки этот
+// таймер немедленно отменяет и ставит новую подсветку. Без общего таймера
+// каждая карточка имела свой счётчик и старый dispose затирал свежую
+// подсветку → визуальное мерцание.
+let globalLeaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function setHighlight(next: Set<string>) {
+  if (globalLeaveTimer) { clearTimeout(globalLeaveTimer); globalLeaveTimer = null }
+  highlightedIds.value = next
+}
+function clearHighlight() {
+  if (globalLeaveTimer) clearTimeout(globalLeaveTimer)
+  globalLeaveTimer = setTimeout(() => {
+    highlightedIds.value = null
+    globalLeaveTimer = null
+  }, 140)
+}
+provide('glyph:setHighlight', setHighlight)
+provide('glyph:clearHighlight', clearHighlight)
+
+// «Ветви» ноды — транзитивный обход в ОБА направления по рёбрам. Это
+// включает: саму ноду, все ноды от которых она зависит (incoming) И все
+// ноды, которые зависят от неё (outgoing) — рекурсивно. Хорошо для понимания
+// «что сломаю если изменю это».
+provide('glyph:neighborsOf', (id: string): Set<string> => {
+  const set = new Set<string>([id])
+  const queue: string[] = [id]
+  // Pre-build adjacency once per traversal — O(E) вместо O(N·E)
+  const adj = new Map<string, Set<string>>()
+  for (const e of currentDoc.value.edges) {
+    const from = e.from.split('.')[0]
+    const to = e.to.split('.')[0]
+    if (!from || !to) continue
+    if (!adj.has(from)) adj.set(from, new Set())
+    if (!adj.has(to)) adj.set(to, new Set())
+    adj.get(from)!.add(to)
+    adj.get(to)!.add(from)
+  }
+  while (queue.length) {
+    const cur = queue.shift()!
+    const next = adj.get(cur)
+    if (!next) continue
+    for (const n of next) {
+      if (set.has(n)) continue
+      set.add(n)
+      queue.push(n)
+    }
+  }
+  return set
+})
+
+// ─── Selected node ───────────────────────────────────────────────────────
+// Последняя «выбранная» нода (через клик в списке слева или в графе).
+// Подсветка стойкая, не сбрасывается на pointerleave. Используется обоими
+// представлениями: CardsListView рисует акцентную рамку, ObstructionNode —
+// неоновое кольцо.
+const selectedNodeId = ref<string | null>(null)
+provide('glyph:selectedNodeId', selectedNodeId)
+function selectNode(id: string) {
+  selectedNodeId.value = id
+}
+provide('glyph:selectNode', selectNode)
+
 // guard against feedback loops when we programmatically rewrite the textarea
 let syncingFromGraph = false
 
@@ -159,12 +242,10 @@ function onPickerRename(id: string, name: string) {
   persist(graphs.value, currentId.value)
 }
 
-// ─── Centralized collapse state ──────────────────────────────────────────
-// Source of truth = a reactive Set of node ids that are currently collapsed.
-// Each ObstructionNode injects this set + a toggle action. We replace the
-// Set instance on every change so the .has() result stays reactive.
-const collapsedNodes = ref<Set<string>>(new Set())
-provide('glyph:collapsedNodes', collapsedNodes)
+// Source of truth for collapsed state is declared higher up (above
+// applyFromDsl) to avoid a TDZ hit on the initial synchronous call.
+// Each ObstructionNode injects this set + the toggle action below.
+// We replace the Set instance on every change so .has() stays reactive.
 
 function computeDownstream(rootId: string): Set<string> {
   const out = new Set<string>([rootId])
@@ -212,9 +293,10 @@ function expandAll() {
   collapsedNodes.value = new Set()
 }
 
-// Card-list click → pan + zoom the graph to that node.
+// Card-list click → pan + zoom the graph to that node + persist selection.
 const graphCanvas = ref<{ focusNode: (id: string) => void } | null>(null)
 function onCardFocus(id: string) {
+  selectedNodeId.value = id
   graphCanvas.value?.focusNode(id)
 }
 
@@ -222,6 +304,20 @@ function onCardFocus(id: string) {
 // the cached layout look stale (long diagonal edges, overlap).
 function relayout() {
   void applyFromDoc({ ...currentDoc.value })
+}
+
+// «Оптимизировать пути» — прогон ELK с агрессивным crossing-minimization.
+// Медленнее обычного relayout (thoroughness:40 vs default 7), но даёт
+// заметно меньше пересечений на запутанных графах.
+async function optimizePaths() {
+  const next = { ...currentDoc.value }
+  currentDoc.value = next
+  const flow = await toFlow(next, collapsedNodes.value, { optimize: true })
+  nodes.value = flow.nodes
+  edges.value = flow.edges
+  syncingFromGraph = true
+  dslText.value = toDsl(next)
+  setTimeout(() => { syncingFromGraph = false }, 0)
 }
 
 function onPickerRemove(id: string) {
@@ -452,6 +548,7 @@ function onSplitterPointerUp(ev: PointerEvent) {
         @collapse-all="collapseAll"
         @expand-all="expandAll"
         @relayout="relayout"
+        @optimize="optimizePaths"
       />
     </main>
   </div>

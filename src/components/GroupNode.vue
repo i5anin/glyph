@@ -297,10 +297,14 @@ const frameColor = computed(() =>
   background: linear-gradient(180deg, rgba(26, 38, 56, 0.85), rgba(15, 23, 34, 0.7));
   border-bottom: 1px dashed color-mix(in oklab, var(--gc) 60%, transparent);
   color: var(--text-dim);
-  /* the header is always interactive so users can dbl-click to enter edit */
+  /* Header is the drag-handle (vue-flow looks for .group-node__header on the
+     group node). pointer-events:auto is required for vue-flow to receive the
+     pointerdown; the wrapper itself is non-interactive (so canvas panning
+     works when clicking the body of the group). */
   pointer-events: auto;
-  cursor: pointer;
+  cursor: grab;
 }
+.group-node__header:active { cursor: grabbing; }
 
 .group-node--editing .group-node__header {
   background: linear-gradient(180deg, rgba(54, 30, 12, 0.95), rgba(28, 16, 8, 0.85));

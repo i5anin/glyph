@@ -56,22 +56,86 @@ const ROOT_OPTIONS: Record<string, string> = {
   'elk.spacing.nodeNode': '40',
   'elk.spacing.edgeNode': '16',
   'elk.spacing.edgeEdge': '10',
+  // Disconnected subgraphs go side-by-side, not on top of each other
+  'elk.separateConnectedComponents': 'true',
+  'elk.spacing.componentComponent': '80',
+}
+
+// «Оптимизация путей» — отдельный профиль с агрессивным crossing-minimization,
+// бóльшими отступами и максимальной thoroughness. Считается медленнее
+// (~10-30× обычного на больших графах), вызывается только по кнопке.
+const OPTIMIZE_OPTIONS: Record<string, string> = {
+  ...ROOT_OPTIONS,
+  // thoroughness: 1=fast / 7=default / 100=max
+  'elk.layered.thoroughness': '100',
+  // Crossing minimization — multi-pass layer sweep + greedy switch
+  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+  'elk.layered.crossingMinimization.semiInteractive': 'false',
+  'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
+  'elk.layered.crossingMinimization.greedySwitch.activationThreshold': '40',
+  // Cycle breaking + feedback edges — чистая укладка циклов
+  'elk.layered.cycleBreaking.strategy': 'GREEDY',
+  'elk.layered.feedbackEdges': 'true',
+  // Удалить лишние изломы
+  'elk.layered.unnecessaryBendpoints': 'true',
+  // BRANDES_KOEPF: максимальное выпрямление
+  'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
+  'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+  // Больше воздуха везде — меньше визуальной каши
+  'elk.spacing.nodeNode': '70',
+  'elk.spacing.edgeNode': '30',
+  'elk.spacing.edgeEdge': '24',
+  'elk.spacing.componentComponent': '140',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '32',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '20',
+  // Высокая точность распределения по слоям + компактификация
+  'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+  'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
 }
 
 const GROUP_PADDING_OPT = `[top=${GROUP_PADDING + GROUP_HEADER},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`
 
-// Inside a compound, members can be packed tighter than the inter-group gap,
-// but not too tight — very small values can confuse BRANDES_KOEPF placement.
+// Compound (group) layout — явно прописываем алгоритм, направление и routing,
+// чтобы ELK не использовал дефолты для контейнеров (которые могут отличаться
+// от root и приводить к перекрытию). Spacing внутри плотнее, чем между
+// группами наверху.
 const COMPOUND_OPTIONS: Record<string, string> = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.edgeRouting': 'ORTHOGONAL',
   'elk.padding': GROUP_PADDING_OPT,
   'elk.layered.spacing.nodeNodeBetweenLayers': '40',
   'elk.spacing.nodeNode': '28',
 }
 
+// «Оптимизация» внутри компаунда — те же агрессивные опции, но spacing
+// внутри плотнее, чем на root-уровне (иначе группы раздуваются непомерно).
+const COMPOUND_OPTIMIZE_OPTIONS: Record<string, string> = {
+  ...COMPOUND_OPTIONS,
+  'elk.layered.thoroughness': '100',
+  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+  'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
+  'elk.layered.unnecessaryBendpoints': 'true',
+  'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
+  'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+  'elk.spacing.edgeEdge': '14',
+  'elk.spacing.edgeNode': '20',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '60',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '22',
+}
+
+export interface ToFlowOptions {
+  /** Run ELK with the high-thoroughness "optimize paths" profile. */
+  optimize?: boolean
+}
+
 export async function toFlow(
   doc: ObstructionDoc,
   collapsedSet: Set<string> = new Set(),
+  opts: ToFlowOptions = {},
 ): Promise<FlowGraph> {
+  const rootOptions = opts.optimize ? OPTIMIZE_OPTIONS : ROOT_OPTIONS
   const groups = doc.groups ?? []
   const junctions = doc.junctions ?? []
   const junctionIds = new Set(junctions.map((j) => j.id))
@@ -113,12 +177,13 @@ export async function toFlow(
 
   const compounds: ElkNode[] = []
   const compoundIdOf = (gid: string) => `__group__${gid}`
+  const compoundOpts = opts.optimize ? COMPOUND_OPTIMIZE_OPTIONS : COMPOUND_OPTIONS
   for (const g of groups) {
     const children = compoundChildren.get(g.id) ?? []
     if (children.length === 0) continue
     compounds.push({
       id: compoundIdOf(g.id),
-      layoutOptions: COMPOUND_OPTIONS,
+      layoutOptions: compoundOpts,
       children,
     })
   }
@@ -137,7 +202,7 @@ export async function toFlow(
   try {
     layouted = (await elk.layout({
       id: 'root',
-      layoutOptions: ROOT_OPTIONS,
+      layoutOptions: rootOptions,
       children: [...compounds, ...freeChildren],
       edges: elkEdges,
     })) as ElkRoot
@@ -175,16 +240,22 @@ export async function toFlow(
   // Safety net: any doc.node / junction that didn't get a position from ELK
   // (network issues, layout edge cases, unexpected hierarchy) gets a default
   // grid slot so it stays visible instead of vanishing.
+  // Crucially — place them BELOW the existing ELK layout (not at 0,0) so
+  // missing nodes don't visually overlap the rest of the graph.
   const missing = doc.nodes.filter((n) => !absPos.has(n.id))
   if (missing.length > 0) {
     console.warn(
       `[glyph] ${missing.length}/${doc.nodes.length} nodes missing from ELK output — placing on fallback grid`,
     )
+    // Find the bottom edge of the ELK-laid-out content
+    let maxY = 0
+    for (const p of absPos.values()) maxY = Math.max(maxY, p.y + p.h)
+    const startY = maxY + 80 // gap between ELK content and fallback grid
     for (let i = 0; i < missing.length; i++) {
       const n = missing[i]!
       absPos.set(n.id, {
         x: (i % 10) * (NODE_WIDTH + 60),
-        y: Math.floor(i / 10) * 200,
+        y: startY + Math.floor(i / 10) * 200,
         w: NODE_WIDTH,
         h: estimateHeight(n, collapsedSet.has(n.id)),
       })
@@ -245,15 +316,25 @@ export async function toFlow(
   // ─── Build vue-flow nodes ────────────────────────────────────────────────
   const flowNodes: Node[] = []
 
-  // groups first (lowest z-index) — sized by ELK's compound dimensions
+  // groupId → finally-rendered position on canvas (user-x/y override wins
+  // over ELK's compound origin). Used below to convert a child's absolute
+  // ELK coordinate into a position RELATIVE to its parent group — which is
+  // what vue-flow's parentNode feature expects.
+  const groupFinalPos = new Map<string, { x: number; y: number }>()
+
+  // groups first (lowest z-index) — sized by ELK's compound dimensions.
+  // The header (.group-node__header) is the drag handle; dragging it via
+  // vue-flow's native handling moves the group AND every child whose
+  // parentNode is this group.
   for (const g of groups) {
     const cp = absPos.get(compoundIdOf(g.id))
     if (!cp) continue
-    // Manual user overrides (resize) win over auto-computed dimensions.
+    // Manual user overrides (resize / drag) win over auto-computed dimensions.
     const x = g.x ?? cp.x
     const y = g.y ?? cp.y
     const w = g.width ?? cp.w
     const h = g.height ?? cp.h
+    groupFinalPos.set(g.id, { x, y })
     flowNodes.push({
       id: g.id,
       type: 'group-container',
@@ -261,18 +342,43 @@ export async function toFlow(
       data: { ...g, headerHeight: GROUP_HEADER },
       style: { width: `${w}px`, height: `${h}px`, zIndex: 0 },
       selectable: false,
-      draggable: false,
+      draggable: true,
+      dragHandle: '.group-node__header',
       focusable: false,
     })
+  }
+
+  // Helper: convert an absolute ELK position to vue-flow's expected form.
+  // If the node belongs to a group → make position relative to the group's
+  // ELK origin (NOT user origin — vue-flow handles that internally because
+  // we set parentNode); also attach parentNode so dragging the group moves
+  // children with it.
+  function withParent(
+    id: string,
+    absX: number,
+    absY: number,
+    groupId: string | undefined,
+  ): { position: { x: number; y: number }; parentNode?: string } {
+    if (!groupId || !groupIds.has(groupId)) {
+      return { position: { x: absX, y: absY } }
+    }
+    const cp = absPos.get(compoundIdOf(groupId))
+    if (!cp) return { position: { x: absX, y: absY } }
+    return {
+      position: { x: absX - cp.x, y: absY - cp.y },
+      parentNode: groupId,
+    }
   }
 
   for (const n of doc.nodes) {
     const pos = absPos.get(n.id)
     if (!pos) continue
+    const wp = withParent(n.id, pos.x, pos.y, n.group)
     flowNodes.push({
       id: n.id,
       type: 'obstruction',
-      position: { x: pos.x, y: pos.y },
+      position: wp.position,
+      parentNode: wp.parentNode,
       data: n,
       style: { width: `${NODE_WIDTH}px` },
     })
@@ -281,10 +387,12 @@ export async function toFlow(
   for (const j of junctions) {
     const pos = absPos.get(j.id)
     if (!pos) continue
+    const wp = withParent(j.id, pos.x, pos.y, j.group)
     flowNodes.push({
       id: j.id,
       type: 'junction',
-      position: { x: pos.x, y: pos.y },
+      position: wp.position,
+      parentNode: wp.parentNode,
       data: j,
       style: { width: `${JUNCTION_SIZE}px`, height: `${JUNCTION_SIZE}px` },
     })

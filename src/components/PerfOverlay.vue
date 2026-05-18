@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { ChevronsDownUp, ChevronsUpDown, RotateCw } from 'lucide-vue-next'
+import { ChevronsDownUp, ChevronsUpDown, RotateCw, Wand2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   nodes: number
@@ -12,7 +12,18 @@ const emit = defineEmits<{
   'collapse-all': []
   'expand-all': []
   relayout: []
+  optimize: []
 }>()
+
+const optimizing = ref(false)
+async function onOptimize() {
+  if (optimizing.value) return
+  optimizing.value = true
+  emit('optimize')
+  // Lock UI for ~1.5s — ELK with thoroughness:40 takes noticeable time and
+  // we don't want double-clicks queuing up redundant passes.
+  setTimeout(() => { optimizing.value = false }, 1500)
+}
 
 const fps = ref(0)
 
@@ -95,6 +106,16 @@ watch(
         @click="emit('relayout')"
       >
         <RotateCw :size="12" :stroke-width="2" />
+      </button>
+      <button
+        class="perf-overlay__btn perf-overlay__btn--accent"
+        :class="{ 'perf-overlay__btn--busy': optimizing }"
+        type="button"
+        title="Оптимизировать пути — минимизировать пересечения, выпрямить рёбра (медленнее)"
+        :disabled="optimizing"
+        @click="onOptimize"
+      >
+        <Wand2 :size="12" :stroke-width="2" />
       </button>
     </div>
   </div>
@@ -185,5 +206,27 @@ watch(
   color: var(--accent-cyan);
   border-color: var(--accent-cyan);
   background: rgba(79, 209, 255, 0.08);
+}
+
+.perf-overlay__btn--accent {
+  color: var(--accent-magenta, #c8a);
+  border-color: rgba(204, 136, 187, 0.35);
+}
+.perf-overlay__btn--accent:hover:not(:disabled) {
+  color: var(--accent-magenta, #c8a);
+  border-color: var(--accent-magenta, #c8a);
+  background: rgba(204, 136, 187, 0.1);
+  box-shadow: 0 0 8px rgba(204, 136, 187, 0.3);
+}
+
+.perf-overlay__btn--busy {
+  cursor: wait;
+  animation: perf-pulse 0.9s ease-in-out infinite;
+}
+.perf-overlay__btn:disabled { opacity: 0.6; }
+
+@keyframes perf-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(204, 136, 187, 0); }
+  50%      { box-shadow: 0 0 10px rgba(204, 136, 187, 0.6); }
 }
 </style>

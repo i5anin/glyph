@@ -4,6 +4,8 @@ import {
   AppWindow,
   ChevronsDownUp,
   ChevronsUpDown,
+  ChevronDown,
+  ChevronRight,
   Cloud,
   Database,
   FileText,
@@ -27,6 +29,8 @@ const emit = defineEmits<{
 // Mirror graph-side collapse state — collapsed cards show only the title row
 // (no function list), staying in sync with the graph.
 const collapsedSet = inject<Ref<Set<string>>>('glyph:collapsedNodes')
+const toggleNodeSolo = inject<(id: string) => void>('glyph:toggleNodeSolo')
+const selectedNodeId = inject<Ref<string | null>>('glyph:selectedNodeId')
 
 const search = ref('')
 
@@ -138,6 +142,15 @@ function isCardCollapsed(n: NodeSpec): boolean {
 function onCardClick(n: NodeSpec) {
   emit('focus-node', n.id)
 }
+
+// Клик по шеврону = переключить collapse И телепортироваться к ноде в графе.
+// Останавливаем propagation вручную, потому что иначе родительский @click
+// карточки выстрелит дважды (focus → focus). Один эмит достаточно.
+function onChevronClick(n: NodeSpec, ev: MouseEvent) {
+  ev.stopPropagation()
+  toggleNodeSolo?.(n.id)
+  emit('focus-node', n.id)
+}
 </script>
 
 <template>
@@ -202,12 +215,29 @@ function onCardClick(n: NodeSpec) {
             v-for="n in nodes"
             :key="n.id"
             class="cards-list__card"
-            :class="{ 'cards-list__card--collapsed': isCardCollapsed(n) }"
+            :class="{
+              'cards-list__card--collapsed': isCardCollapsed(n),
+              'cards-list__card--selected': selectedNodeId?.value === n.id,
+            }"
             :style="{ '--cc': colorVar[nodeColor(n)] }"
             :title="`Перейти к ${n.title} в графе`"
             @click="onCardClick(n)"
           >
             <div class="cards-list__card-head">
+              <button
+                v-if="functionRows(n).length"
+                class="cards-list__card-chevron"
+                type="button"
+                :title="isCardCollapsed(n) ? 'Развернуть + перейти' : 'Свернуть + перейти'"
+                @click="onChevronClick(n, $event)"
+              >
+                <component
+                  :is="isCardCollapsed(n) ? ChevronRight : ChevronDown"
+                  :size="12"
+                  :stroke-width="2"
+                />
+              </button>
+              <span v-else class="cards-list__card-chevron-spacer" />
               <component
                 :is="iconFor(n.icon)"
                 :size="13"
@@ -382,14 +412,56 @@ function onCardClick(n: NodeSpec) {
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cc) 50%, transparent);
 }
 
+/* Постоянная подсветка последней «найденной» карточки —
+   осталась после клика, не сбрасывается на pointerleave */
+.cards-list__card--selected {
+  background: color-mix(in oklab, var(--cc) 18%, var(--node-bg-elev));
+  border-left-width: 4px;
+  box-shadow:
+    inset 0 0 0 1px var(--cc),
+    0 0 14px color-mix(in oklab, var(--cc) 40%, transparent);
+}
+.cards-list__card--selected:hover {
+  background: color-mix(in oklab, var(--cc) 25%, var(--node-bg-elev));
+}
+
 .cards-list__card--collapsed {
   opacity: 0.85;
+}
+/* selected всегда полнотонная даже если карточка collapsed */
+.cards-list__card--collapsed.cards-list__card--selected {
+  opacity: 1;
 }
 
 .cards-list__card-head {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.cards-list__card-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: -2px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s;
+}
+.cards-list__card-chevron:hover {
+  color: var(--cc);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cards-list__card-chevron-spacer {
+  width: 16px;
+  flex-shrink: 0;
 }
 
 .cards-list__card-icon {

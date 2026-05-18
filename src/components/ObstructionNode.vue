@@ -57,6 +57,42 @@ const toggleNodeCascade = inject<(id: string) => void>(
 
 const collapsed = computed(() => collapsedSet?.value.has(props.id) ?? false)
 
+// ─── Hover highlight (centralized in App.vue) ───────────────────────────
+// Общий Set «активных» id + ОДИН глобальный leave-таймер (см. App.vue).
+// На pointerenter пишем self + всю транзитивную ветку. На leave — debounce
+// 140ms; следующий enter этот таймер сразу гасит, поэтому нет моргания
+// при переходе мыши с одной карточки на другую.
+const highlightedIds = inject<Ref<Set<string> | null>>('glyph:highlightedIds')
+const neighborsOf = inject<(id: string) => Set<string>>('glyph:neighborsOf')
+const setHighlight = inject<(s: Set<string>) => void>('glyph:setHighlight')
+const clearHighlight = inject<() => void>('glyph:clearHighlight')
+
+// Persistent selection — клик в списке слева или в самом графе помечает
+// «выбранную» ноду, она остаётся подсвеченной до следующего выбора.
+const selectedNodeId = inject<Ref<string | null>>('glyph:selectedNodeId')
+const selectNode = inject<(id: string) => void>('glyph:selectNode')
+const isSelected = computed(() => selectedNodeId?.value === props.id)
+function onNodeClick() {
+  selectNode?.(props.id)
+}
+
+const isDimmed = computed(() => {
+  const set = highlightedIds?.value
+  if (!set) return false
+  return !set.has(props.id)
+})
+// Highlighted nodes (включая «свои» соседи) выглядят одинаково — единый
+// dim/non-dim. Ринг на конкретной наведённой карточке убрали: при ховере
+// на ребро мы не знаем где «центр», и микс из dim и ring выглядел шизо.
+
+function onNodePointerEnter() {
+  if (!setHighlight || !neighborsOf) return
+  setHighlight(neighborsOf(props.id))
+}
+function onNodePointerLeave() {
+  clearHighlight?.()
+}
+
 function onSoloClick() {
   toggleNodeSolo?.(props.id)
 }
@@ -222,7 +258,15 @@ onBeforeUnmount(() => {
   <div
     ref="rootEl"
     class="obs-node"
-    :class="{ 'obs-node--editing': editing, 'obs-node--collapsed': collapsed }"
+    :class="{
+      'obs-node--editing': editing,
+      'obs-node--collapsed': collapsed,
+      'obs-node--dim': isDimmed,
+      'obs-node--selected': isSelected,
+    }"
+    @pointerenter="onNodePointerEnter"
+    @pointerleave="onNodePointerLeave"
+    @click="onNodeClick"
   >
     <div class="obs-node__header">
       <button
@@ -372,7 +416,25 @@ onBeforeUnmount(() => {
     0 0 0 1px rgba(255, 255, 255, 0.02) inset,
     0 8px 28px rgba(0, 0, 0, 0.45);
   position: relative;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
+
+/* Карточка не связана с наведённой — приглушаем чтобы выделить связку */
+.obs-node--dim {
+  opacity: 0.25;
+}
+
+/* Постоянная подсветка «выбранной» (последний клик в списке/графе) */
+.obs-node--selected {
+  border-color: var(--accent-cyan);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 8px 28px rgba(0, 0, 0, 0.45),
+    0 0 0 2px var(--accent-cyan),
+    0 0 24px rgba(79, 209, 255, 0.55);
+}
+/* selected всегда виден — даже если карточка попала в dim из-за hover */
+.obs-node--selected.obs-node--dim { opacity: 1; }
 
 .obs-node__header {
   display: flex;
