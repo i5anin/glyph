@@ -7,11 +7,27 @@ import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
 import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
 import type { NodeSpec, ObstructionDoc } from './dsl/schema'
-import { pfForumDemo } from './demo/pfForumDemo'
+import {
+  loadGraphs,
+  persist,
+  createBlankGraph,
+  duplicateGraph,
+  type SavedGraph,
+} from './storage/graphs'
 import GraphCanvas from './components/GraphCanvas.vue'
 import DslEditor from './components/DslEditor.vue'
+import GraphPicker from './components/GraphPicker.vue'
 
-const dslText = ref(pfForumDemo)
+// ─── Saved-graphs storage ───────────────────────────────────────────────
+const initial = loadGraphs()
+const graphs = ref<SavedGraph[]>(initial.graphs)
+const currentId = ref<string>(initial.currentId)
+
+function currentGraph(): SavedGraph | undefined {
+  return graphs.value.find((g) => g.id === currentId.value)
+}
+
+const dslText = ref(currentGraph()?.yaml ?? '')
 const error = ref<string | null>(null)
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
@@ -54,7 +70,80 @@ applyFromDsl(dslText.value)
 
 watchDebounced(dslText, (v) => applyFromDsl(v), { debounce: 300, maxWait: 1200 })
 
+// ─── Persist YAML edits back into the current saved graph ────────────────
+watchDebounced(
+  dslText,
+  (v) => {
+    const idx = graphs.value.findIndex((g) => g.id === currentId.value)
+    if (idx === -1) return
+    if (graphs.value[idx]!.yaml === v) return
+    graphs.value[idx]!.yaml = v
+    persist(graphs.value, currentId.value)
+  },
+  { debounce: 600, maxWait: 2400 },
+)
+
 watch(error, () => {})
+
+// ─── Graph picker handlers ──────────────────────────────────────────────
+// Flush in-flight edits of the current graph synchronously before switching,
+// so the persist-debounce can't drop changes onto the wrong target.
+function flushCurrentYaml() {
+  const idx = graphs.value.findIndex((g) => g.id === currentId.value)
+  if (idx !== -1) graphs.value[idx]!.yaml = dslText.value
+}
+
+function onPickerSelect(id: string) {
+  if (id === currentId.value) return
+  flushCurrentYaml()
+  currentId.value = id
+  persist(graphs.value, id)
+  const g = currentGraph()
+  if (g) dslText.value = g.yaml // triggers applyFromDsl via watchDebounced
+}
+
+function onPickerAdd() {
+  flushCurrentYaml()
+  const g = createBlankGraph()
+  graphs.value = [...graphs.value, g]
+  currentId.value = g.id
+  persist(graphs.value, g.id)
+  dslText.value = g.yaml
+}
+
+function onPickerDuplicate(id: string) {
+  flushCurrentYaml()
+  const src = graphs.value.find((g) => g.id === id)
+  if (!src) return
+  const copy = duplicateGraph(src)
+  graphs.value = [...graphs.value, copy]
+  currentId.value = copy.id
+  persist(graphs.value, copy.id)
+  dslText.value = copy.yaml
+}
+
+function onPickerRename(id: string, name: string) {
+  const idx = graphs.value.findIndex((g) => g.id === id)
+  if (idx === -1) return
+  graphs.value[idx] = { ...graphs.value[idx]!, name }
+  graphs.value = [...graphs.value]
+  persist(graphs.value, currentId.value)
+}
+
+function onPickerRemove(id: string) {
+  if (graphs.value.length <= 1) return
+  const idx = graphs.value.findIndex((g) => g.id === id)
+  if (idx === -1) return
+  const wasCurrent = id === currentId.value
+  if (!wasCurrent) flushCurrentYaml()
+  graphs.value = graphs.value.filter((g) => g.id !== id)
+  if (wasCurrent) {
+    const next = graphs.value[Math.max(0, idx - 1)] ?? graphs.value[0]!
+    currentId.value = next.id
+    dslText.value = next.yaml
+  }
+  persist(graphs.value, currentId.value)
+}
 
 // ─── graph-side mutations ───
 
@@ -172,7 +261,15 @@ function onSplitterPointerUp(ev: PointerEvent) {
         </button>
         <span class="app__brand-mark">◆</span>
         <span class="app__brand-name">Glyph</span>
-        <span class="app__brand-sub">architecture as glyphs · prototype</span>
+        <GraphPicker
+          :graphs="graphs"
+          :current-id="currentId"
+          @select="onPickerSelect"
+          @add="onPickerAdd"
+          @duplicate="onPickerDuplicate"
+          @rename="onPickerRename"
+          @remove="onPickerRemove"
+        />
       </div>
       <div class="app__hint">
         <span class="kbd">YAML</span> слева ↔
@@ -229,7 +326,7 @@ function onSplitterPointerUp(ev: PointerEvent) {
 
 .app__brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
 }
 
