@@ -342,8 +342,11 @@ export async function toFlow(
       data: { ...g, headerHeight: GROUP_HEADER },
       style: { width: `${w}px`, height: `${h}px`, zIndex: 0 },
       selectable: false,
-      draggable: true,
-      dragHandle: '.group-node__header',
+      // draggable:false — иначе vue-flow ставит inline pointer-events:auto
+      // на wrapper, и канвас перестаёт паниться, когда курсор над телом
+      // группы. Свой drag реализован прямо в GroupNode.vue через pointer-
+      // events на header + updateNode (см. onHeaderPointerDown там).
+      draggable: false,
       focusable: false,
     })
   }

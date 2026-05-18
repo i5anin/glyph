@@ -186,6 +186,86 @@ function onResizeStart(ev: PointerEvent, dir: Dir) {
 const frameColor = computed(() =>
   editing.value ? 'var(--accent-orange)' : baseColor.value,
 )
+
+// ─── Custom drag по header ─────────────────────────────────────────────
+// Мы не отдаём драг группы vue-flow (draggable:false). Иначе vue-flow
+// ставит inline pointer-events:auto на wrapper, и канвас перестаёт паниться,
+// когда мышь над телом группы. Здесь — ручной handler: header ловит
+// pointerdown, мы тащим updateNode и обновляем groupPatch на отпускании.
+// Дети с parentNode двигаются сами — vue-flow рендерит их как
+// parent.position + child.position.
+
+const dragging = ref(false)
+
+function onHeaderPointerDown(ev: PointerEvent) {
+  // Левая кнопка только; двойной клик уходит в edit-mode выше
+  if (ev.button !== 0) return
+  // Если уже в режиме edit — не тащим, edit-mode сам ловит pointerdown
+  if (editing.value) return
+  ev.preventDefault()
+  ev.stopPropagation()
+
+  const handle = ev.currentTarget as HTMLElement
+  handle.setPointerCapture(ev.pointerId)
+  dragging.value = true
+
+  const node = findNode(props.id)
+  const startX = node?.position?.x ?? 0
+  const startY = node?.position?.y ?? 0
+  const startMouseX = ev.clientX
+  const startMouseY = ev.clientY
+  const zoom = viewport.value.zoom || 1
+
+  let raf: number | null = null
+  let lastEv = ev
+  let curX = startX
+  let curY = startY
+  // 4px deadzone — иначе обычный single-click стартует крошечный drag и
+  // ломает следующий dblclick (браузер не считает event'ы за двойной если
+  // между ними был серьёзный move)
+  const DEADZONE = 4
+  let moved = false
+
+  function flush() {
+    raf = null
+    const dx = (lastEv.clientX - startMouseX) / zoom
+    const dy = (lastEv.clientY - startMouseY) / zoom
+    curX = startX + dx
+    curY = startY + dy
+    const n = findNode(props.id)
+    const existingStyle = (n?.style as Record<string, unknown> | undefined) ?? {}
+    updateNode(props.id, {
+      position: { x: curX, y: curY },
+      style: existingStyle,
+    })
+  }
+
+  function onMove(e: PointerEvent) {
+    lastEv = e
+    if (!moved) {
+      const dx = e.clientX - startMouseX
+      const dy = e.clientY - startMouseY
+      if (Math.abs(dx) < DEADZONE && Math.abs(dy) < DEADZONE) return
+      moved = true
+    }
+    if (raf == null) raf = requestAnimationFrame(flush)
+  }
+
+  function onUp() {
+    handle.removeEventListener('pointermove', onMove)
+    handle.removeEventListener('pointerup', onUp)
+    handle.removeEventListener('pointercancel', onUp)
+    if (raf != null) cancelAnimationFrame(raf)
+    dragging.value = false
+    if (moved) {
+      groupPatch(props.id, { x: Math.round(curX), y: Math.round(curY) })
+    }
+  }
+
+  handle.addEventListener('pointermove', onMove)
+  handle.addEventListener('pointerup', onUp)
+  handle.addEventListener('pointercancel', onUp)
+}
 </script>
 
 <template>
@@ -204,8 +284,11 @@ const frameColor = computed(() =>
   >
     <div
       class="group-node__header"
-      :title="editing ? 'Двойной клик — выйти из правки рамки' : 'Двойной клик — редактировать рамку'"
+      :title="editing
+        ? 'Двойной клик — выйти из правки рамки'
+        : 'Тяни — переместить группу с детьми. Двойной клик — режим resize.'"
       @dblclick="onHeaderDblClick"
+      @pointerdown="onHeaderPointerDown"
     >
       <Folder :size="13" :stroke-width="2" class="group-node__icon" />
       <span class="group-node__title">{{ title }}</span>
