@@ -18,6 +18,8 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronsDown,
+  ChevronsRight,
   Cloud,
   Database,
   Download,
@@ -44,17 +46,22 @@ const node = computed(() => props.data)
 const { edges, updateNodeInternals } = useVueFlow()
 
 // ─── Collapse state (centralized in App.vue) ─────────────────────────────
-// Reads from a shared Set<id>. Clicking the chevron defers to the App-level
-// toggle so cascading collapse (root → all downstream) is consistent.
+// Reads from a shared Set<id>. Two separate actions:
+//   solo    → toggle just this node
+//   cascade → toggle this node + every downstream dependency
 const collapsedSet = inject<Ref<Set<string>>>('glyph:collapsedNodes')
-const toggleNodeCollapsed = inject<(id: string) => void>(
-  'glyph:toggleNodeCollapsed',
+const toggleNodeSolo = inject<(id: string) => void>('glyph:toggleNodeSolo')
+const toggleNodeCascade = inject<(id: string) => void>(
+  'glyph:toggleNodeCascade',
 )
 
 const collapsed = computed(() => collapsedSet?.value.has(props.id) ?? false)
 
-function toggleCollapse() {
-  toggleNodeCollapsed?.(props.id)
+function onSoloClick() {
+  toggleNodeSolo?.(props.id)
+}
+function onCascadeClick() {
+  toggleNodeCascade?.(props.id)
 }
 
 // Whenever this node's collapsed state flips (either from local toggle or
@@ -221,11 +228,20 @@ onBeforeUnmount(() => {
       <button
         class="obs-node__collapse-btn nodrag nopan"
         type="button"
-        :title="collapsed ? `Развернуть (${hiddenRowCount} строк скрыто)` : 'Свернуть строки функций'"
+        :title="collapsed ? `Развернуть карточку (${hiddenRowCount} строк скрыто)` : 'Свернуть только эту карточку'"
         @pointerdown.stop
-        @click.stop="toggleCollapse"
+        @click.stop="onSoloClick"
       >
         <component :is="collapsed ? ChevronRight : ChevronDown" :size="13" :stroke-width="2.2" />
+      </button>
+      <button
+        class="obs-node__cascade-btn nodrag nopan"
+        type="button"
+        :title="collapsed ? 'Развернуть всю ветку (карточку + всё, что она тянет)' : 'Свернуть всю ветку (карточку + все её зависимости)'"
+        @pointerdown.stop
+        @click.stop="onCascadeClick"
+      >
+        <component :is="collapsed ? ChevronsRight : ChevronsDown" :size="13" :stroke-width="2.2" />
       </button>
       <component :is="iconFor(node.icon)" :size="16" :stroke-width="2" class="obs-node__header-icon" />
       <span
@@ -412,8 +428,9 @@ onBeforeUnmount(() => {
   text-overflow: clip;
 }
 
-/* ── Collapse chevron (always visible, on the left of header) ─── */
-.obs-node__collapse-btn {
+/* ── Collapse chevrons (always visible, on the left of header) ─── */
+.obs-node__collapse-btn,
+.obs-node__cascade-btn {
   display: inline-grid;
   place-items: center;
   width: 18px;
@@ -435,6 +452,16 @@ onBeforeUnmount(() => {
   color: var(--accent-cyan);
   border-color: var(--accent-cyan);
   background: rgba(79, 209, 255, 0.08);
+}
+
+/* Cascade chevron — tints orange so two actions are visually distinguishable */
+.obs-node__cascade-btn {
+  color: var(--text-faint);
+}
+.obs-node__cascade-btn:hover {
+  color: var(--accent-orange);
+  border-color: var(--accent-orange);
+  background: rgba(255, 159, 64, 0.1);
 }
 
 .obs-node__collapsed-badge {

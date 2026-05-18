@@ -15,11 +15,39 @@ interface EdgeData {
   color?: 'cyan' | 'green' | 'magenta' | 'orange' | 'yellow' | 'gray'
   label?: string
   shape?: EdgeShape
+  // ELK-routed waypoints (canvas coords). If present, we build an orthogonal
+  // polyline that avoids node bodies. Falls back to smoothstep otherwise.
+  bends?: { x: number; y: number }[]
+  elkStart?: { x: number; y: number }
+  elkEnd?: { x: number; y: number }
 }
 
 const props = defineProps<EdgeProps<EdgeData>>()
 
 const path = computed(() => {
+  const bends = props.data?.bends
+  if (bends && bends.length > 0) {
+    // Polyline path: connect handle position to first bend, then bend-to-bend,
+    // then last bend to handle position. Filters out duplicate points so
+    // sharp corners don't double-render.
+    const points = [
+      { x: props.sourceX, y: props.sourceY },
+      ...bends,
+      { x: props.targetX, y: props.targetY },
+    ]
+    const dedup: { x: number; y: number }[] = []
+    for (const p of points) {
+      const last = dedup[dedup.length - 1]
+      if (!last || Math.abs(last.x - p.x) > 0.5 || Math.abs(last.y - p.y) > 0.5) {
+        dedup.push(p)
+      }
+    }
+    const d = dedup
+      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+      .join(' ')
+    return [d, props.sourceX, props.sourceY] as const
+  }
+
   const shape: EdgeShape = props.data?.shape ?? 'smoothstep'
   const common = {
     sourceX: props.sourceX,
@@ -65,6 +93,7 @@ const color = computed(() => {
     fill="none"
     stroke-width="6"
     stroke-linecap="round"
+    stroke-linejoin="round"
     opacity="0.18"
   />
   <path
@@ -74,6 +103,7 @@ const color = computed(() => {
     fill="none"
     stroke-width="2"
     stroke-linecap="round"
+    stroke-linejoin="round"
   />
   <path
     class="flow-edge__flow"
@@ -82,6 +112,7 @@ const color = computed(() => {
     fill="none"
     stroke-width="2"
     stroke-linecap="round"
+    stroke-linejoin="round"
     stroke-dasharray="6 10"
   />
 </template>

@@ -38,12 +38,12 @@ const currentDoc = shallowRef<ObstructionDoc>({ nodes: [], edges: [] })
 // guard against feedback loops when we programmatically rewrite the textarea
 let syncingFromGraph = false
 
-function applyFromDsl(text: string) {
+async function applyFromDsl(text: string) {
   if (syncingFromGraph) return
   try {
     const doc = parseDsl(text)
     currentDoc.value = doc
-    const flow = toFlow(doc)
+    const flow = await toFlow(doc)
     nodes.value = flow.nodes
     edges.value = flow.edges
     error.value = null
@@ -53,9 +53,9 @@ function applyFromDsl(text: string) {
   }
 }
 
-function applyFromDoc(next: ObstructionDoc) {
+async function applyFromDoc(next: ObstructionDoc) {
   currentDoc.value = next
-  const flow = toFlow(next)
+  const flow = await toFlow(next)
   nodes.value = flow.nodes
   edges.value = flow.edges
   syncingFromGraph = true
@@ -66,9 +66,12 @@ function applyFromDoc(next: ObstructionDoc) {
   }, 0)
 }
 
-applyFromDsl(dslText.value)
+void applyFromDsl(dslText.value)
 
-watchDebounced(dslText, (v) => applyFromDsl(v), { debounce: 300, maxWait: 1200 })
+watchDebounced(dslText, (v) => void applyFromDsl(v), {
+  debounce: 300,
+  maxWait: 1200,
+})
 
 // ─── Persist YAML edits back into the current saved graph ────────────────
 watchDebounced(
@@ -154,19 +157,27 @@ function computeDownstream(rootId: string): Set<string> {
   return out
 }
 
-// Click on a node's chevron:
-//   currently expanded  → collapse THIS node + every descendant (cascade)
-//   currently collapsed → expand THIS one node only (user drills back in)
-function toggleNodeCollapsed(id: string) {
+// Toggle ONLY this node (solo). Cascade is a separate action below.
+function toggleNodeSolo(id: string) {
   const next = new Set(collapsedNodes.value)
-  if (next.has(id)) {
-    next.delete(id)
-  } else {
-    for (const d of computeDownstream(id)) next.add(d)
-  }
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
   collapsedNodes.value = next
 }
-provide('glyph:toggleNodeCollapsed', toggleNodeCollapsed)
+provide('glyph:toggleNodeSolo', toggleNodeSolo)
+
+// Toggle this node + the entire downstream subtree (cascade). The action
+// depends on the CURRENT state of the clicked root: if it's expanded, we
+// collapse the subtree; if it's collapsed, we expand the subtree.
+function toggleNodeCascade(id: string) {
+  const rootCollapsed = collapsedNodes.value.has(id)
+  const reach = computeDownstream(id)
+  const next = new Set(collapsedNodes.value)
+  if (rootCollapsed) for (const d of reach) next.delete(d)
+  else for (const d of reach) next.add(d)
+  collapsedNodes.value = next
+}
+provide('glyph:toggleNodeCascade', toggleNodeCascade)
 
 function collapseAll() {
   collapsedNodes.value = new Set(currentDoc.value.nodes.map((n) => n.id))
@@ -195,7 +206,7 @@ function onPickerRemove(id: string) {
 function onConnect(c: Connection) {
   const e = edgeSpecFromConnection(c)
   if (!e) return
-  applyFromDoc({
+  void applyFromDoc({
     ...currentDoc.value,
     edges: [...currentDoc.value.edges, e],
   })
@@ -214,7 +225,7 @@ function onEdgeUpdate(oldEdgeId: string, conn: Connection) {
     from: endpointRefFromHandle(conn.source, conn.sourceHandle),
     to: endpointRefFromHandle(conn.target, conn.targetHandle),
   }
-  applyFromDoc({ ...currentDoc.value, edges: next })
+  void applyFromDoc({ ...currentDoc.value, edges: next })
 }
 
 function onEdgeRemove(edgeId: string) {
@@ -223,7 +234,7 @@ function onEdgeRemove(edgeId: string) {
   )
   if (idx === -1) return
   const next = currentDoc.value.edges.filter((_, i) => i !== idx)
-  applyFromDoc({ ...currentDoc.value, edges: next })
+  void applyFromDoc({ ...currentDoc.value, edges: next })
 }
 
 // Inline-edit on a node: receive a partial patch and merge.
@@ -232,7 +243,7 @@ function onNodePatch(nodeId: string, patch: Partial<NodeSpec>) {
   if (idx === -1) return
   const next = [...currentDoc.value.nodes]
   next[idx] = { ...next[idx]!, ...patch }
-  applyFromDoc({ ...currentDoc.value, nodes: next })
+  void applyFromDoc({ ...currentDoc.value, nodes: next })
 }
 
 // Edit a single row inside a node.
@@ -247,7 +258,7 @@ function onRowPatch(
   const rows = (n.rows ?? []).map((r) => (r.id === rowId ? { ...r, ...patch } : r))
   const nextNodes = [...currentDoc.value.nodes]
   nextNodes[idx] = { ...n, rows }
-  applyFromDoc({ ...currentDoc.value, nodes: nextNodes })
+  void applyFromDoc({ ...currentDoc.value, nodes: nextNodes })
 }
 
 // Resize / rename / recolor a group frame.
@@ -257,7 +268,7 @@ function onGroupPatch(groupId: string, patch: Record<string, unknown>) {
   if (idx === -1) return
   const next = [...groups]
   next[idx] = { ...next[idx]!, ...patch }
-  applyFromDoc({ ...currentDoc.value, groups: next })
+  void applyFromDoc({ ...currentDoc.value, groups: next })
 }
 
 // ─── DSL panel width (draggable) ─────────────────────────
