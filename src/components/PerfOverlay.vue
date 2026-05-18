@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next'
 
 const props = defineProps<{
   nodes: number
   edges: number
   perf: boolean
+}>()
+
+const emit = defineEmits<{
+  'collapse-all': []
+  'expand-all': []
 }>()
 
 const fps = ref(0)
@@ -64,6 +70,24 @@ watch(
     <div v-if="perf" class="perf-overlay__row perf-overlay__row--note">
       <span class="perf-overlay__note">perf mode</span>
     </div>
+    <div class="perf-overlay__row perf-overlay__row--actions">
+      <button
+        class="perf-overlay__btn"
+        type="button"
+        title="Свернуть все ноды (только in/deps)"
+        @click="emit('collapse-all')"
+      >
+        <ChevronsDownUp :size="12" :stroke-width="2" />
+      </button>
+      <button
+        class="perf-overlay__btn"
+        type="button"
+        title="Развернуть все ноды"
+        @click="emit('expand-all')"
+      >
+        <ChevronsUpDown :size="12" :stroke-width="2" />
+      </button>
+    </div>
   </div>
 </template>
 
@@ -118,5 +142,39 @@ watch(
   color: var(--accent-orange);
   font-size: 9px;
   letter-spacing: 0.04em;
+}
+
+.perf-overlay__row--actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--node-divider);
+}
+
+.perf-overlay__btn {
+  pointer-events: auto;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: 1px solid var(--node-divider);
+  border-radius: 4px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.perf-overlay__btn:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.08);
 }
 </style>

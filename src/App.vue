@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, provide, ref, shallowRef, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import type { Connection, Edge, Node } from '@vue-flow/core'
 import { PanelLeft } from 'lucide-vue-next'
@@ -128,6 +128,22 @@ function onPickerRename(id: string, name: string) {
   graphs.value[idx] = { ...graphs.value[idx]!, name }
   graphs.value = [...graphs.value]
   persist(graphs.value, currentId.value)
+}
+
+// ─── Bulk collapse signal (broadcasts to all ObstructionNode instances) ──
+// Counter `id` increments so the watcher fires even when `collapsed` value
+// doesn't actually change between two clicks.
+const bulkCollapse = ref<{ id: number; collapsed: boolean }>({
+  id: 0,
+  collapsed: false,
+})
+provide('glyph:bulkCollapse', bulkCollapse)
+
+function collapseAll() {
+  bulkCollapse.value = { id: bulkCollapse.value.id + 1, collapsed: true }
+}
+function expandAll() {
+  bulkCollapse.value = { id: bulkCollapse.value.id + 1, collapsed: false }
 }
 
 function onPickerRemove(id: string) {
@@ -312,6 +328,8 @@ function onSplitterPointerUp(ev: PointerEvent) {
         @node-patch="onNodePatch"
         @row-patch="onRowPatch"
         @group-patch="onGroupPatch"
+        @collapse-all="collapseAll"
+        @expand-all="expandAll"
       />
     </main>
   </div>

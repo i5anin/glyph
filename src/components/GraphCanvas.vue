@@ -33,6 +33,8 @@ const emit = defineEmits<{
   'node-patch': [nodeId: string, patch: Record<string, unknown>]
   'row-patch': [nodeId: string, rowId: string, patch: { label?: string; value?: string }]
   'group-patch': [groupId: string, patch: Record<string, unknown>]
+  'collapse-all': []
+  'expand-all': []
 }>()
 
 // Provide patch callbacks so descendant custom nodes can emit inline edits
@@ -219,6 +221,8 @@ onEdgesChange((changes) => {
       :nodes="props.nodes.length"
       :edges="props.edges.length"
       :perf="perfMode"
+      @collapse-all="emit('collapse-all')"
+      @expand-all="emit('expand-all')"
     />
   </div>
 </template>

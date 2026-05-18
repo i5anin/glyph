@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { Handle, Position, useVueFlow, type NodeProps } from '@vue-flow/core'
 import type { NodeSpec, AccentColor } from '../dsl/schema'
 
@@ -16,6 +16,8 @@ import {
   AppWindow,
   Box,
   Check,
+  ChevronDown,
+  ChevronRight,
   Cloud,
   Database,
   Download,
@@ -39,7 +41,45 @@ const props = defineProps<NodeProps<NodeSpec>>()
 
 const node = computed(() => props.data)
 
-const { edges } = useVueFlow()
+const { edges, updateNodeInternals } = useVueFlow()
+
+// ─── Collapse state ───────────────────────────────────────────────────────
+// Local UI state — when true, function rows are dropped from DOM and only
+// the in/deps summary rows remain (those still need DOM because edges hook
+// into their handles). Persists across DSL edits because vue-flow keeps the
+// component instance alive while the node id is stable.
+const collapsed = ref(false)
+
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+  // Tell vue-flow the node's dimensions changed so it re-routes edges.
+  nextTick(() => updateNodeInternals(props.id))
+}
+
+const visibleRows = computed(() => {
+  const rows = node.value.rows ?? []
+  if (!collapsed.value) return rows
+  return rows.filter((r) => r.id === 'in' || r.id === 'deps')
+})
+
+const hiddenRowCount = computed(() => {
+  const total = node.value.rows?.length ?? 0
+  return Math.max(0, total - visibleRows.value.length)
+})
+
+// React to the global "collapse all / expand all" signal.
+const bulkCollapse = inject<Ref<{ id: number; collapsed: boolean }>>(
+  'glyph:bulkCollapse',
+)
+if (bulkCollapse) {
+  watch(
+    () => bulkCollapse.value.id,
+    () => {
+      collapsed.value = bulkCollapse.value.collapsed
+      nextTick(() => updateNodeInternals(props.id))
+    },
+  )
+}
 
 const connectedHandleIds = computed(() => {
   const set = new Set<string>()
@@ -178,8 +218,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="rootEl" class="obs-node" :class="{ 'obs-node--editing': editing }">
+  <div
+    ref="rootEl"
+    class="obs-node"
+    :class="{ 'obs-node--editing': editing, 'obs-node--collapsed': collapsed }"
+  >
     <div class="obs-node__header">
+      <button
+        class="obs-node__collapse-btn nodrag nopan"
+        type="button"
+        :title="collapsed ? `Развернуть (${hiddenRowCount} строк скрыто)` : 'Свернуть строки функций'"
+        @pointerdown.stop
+        @click.stop="toggleCollapse"
+      >
+        <component :is="collapsed ? ChevronRight : ChevronDown" :size="13" :stroke-width="2.2" />
+      </button>
       <component :is="iconFor(node.icon)" :size="16" :stroke-width="2" class="obs-node__header-icon" />
       <span
         class="obs-node__title nodrag nopan"
@@ -190,6 +243,9 @@ onBeforeUnmount(() => {
         @keydown="onEnterBlur"
         @mousedown.stop
       >{{ node.title }}</span>
+      <span v-if="collapsed && hiddenRowCount > 0" class="obs-node__collapsed-badge">
+        +{{ hiddenRowCount }}
+      </span>
       <button
         class="obs-node__edit-btn nodrag nopan"
         type="button"
@@ -201,9 +257,9 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div v-if="node.rows && node.rows.length" class="obs-node__rows">
+    <div v-if="visibleRows.length" class="obs-node__rows">
       <div
-        v-for="row in node.rows"
+        v-for="row in visibleRows"
         :key="row.id"
         class="obs-node__row"
       >
@@ -360,6 +416,52 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 1px var(--accent-cyan);
   overflow: visible;
   text-overflow: clip;
+}
+
+/* ── Collapse chevron (always visible, on the left of header) ─── */
+.obs-node__collapse-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.obs-node__collapse-btn:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.08);
+}
+
+.obs-node__collapsed-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  margin-right: 2px;
+  background: rgba(79, 209, 255, 0.10);
+  color: var(--accent-cyan);
+  border: 1px solid color-mix(in oklab, var(--accent-cyan) 40%, transparent);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.obs-node--collapsed {
+  /* visually distinguish — slightly less prominent border */
+  opacity: 0.92;
 }
 
 /* ── Edit button (pencil → check) ──────────────────────── */
