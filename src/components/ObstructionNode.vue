@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref } from 'vue'
 import { Handle, Position, useVueFlow, type NodeProps } from '@vue-flow/core'
 import type { NodeSpec, AccentColor } from '../dsl/schema'
 
@@ -15,6 +15,7 @@ const rowPatch = inject<RowPatchFn>('glyph:rowPatch', () => {})
 import {
   AppWindow,
   Box,
+  Check,
   Cloud,
   Database,
   Download,
@@ -22,6 +23,7 @@ import {
   FileText,
   Globe,
   Network,
+  Pencil,
   Route,
   Server,
   Trash2,
@@ -117,6 +119,21 @@ function onRowValueBlur(rowId: string, ev: FocusEvent) {
   }
 }
 
+// ─── Edit mode (per-card toggle) ───────────────────────────────────────────
+// Click the pencil that appears on hover → all text in this card becomes
+// editable. Click the check (or anywhere outside the card, or press Esc) → exit.
+const editing = ref(false)
+const rootEl = ref<HTMLDivElement | null>(null)
+
+function onDocPointerDown(ev: PointerEvent) {
+  if (!editing.value) return
+  const root = rootEl.value
+  if (root && ev.target instanceof Node && !root.contains(ev.target)) {
+    editing.value = false
+    document.removeEventListener('pointerdown', onDocPointerDown, true)
+  }
+}
+
 function onEnterBlur(ev: KeyboardEvent) {
   if (ev.key === 'Enter') {
     ev.preventDefault()
@@ -125,23 +142,63 @@ function onEnterBlur(ev: KeyboardEvent) {
   if (ev.key === 'Escape') {
     ev.preventDefault()
     ;(ev.target as HTMLElement).blur()
+    if (editing.value) {
+      editing.value = false
+      document.removeEventListener('pointerdown', onDocPointerDown, true)
+    }
   }
 }
+
+function onEditToggle() {
+  editing.value = !editing.value
+  if (editing.value) {
+    nextTick(() => {
+      // focus the title so the user can start typing immediately
+      const t = rootEl.value?.querySelector<HTMLElement>('.obs-node__title')
+      t?.focus()
+      // place caret at end
+      const sel = window.getSelection()
+      if (t && sel) {
+        const range = document.createRange()
+        range.selectNodeContents(t)
+        range.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+      document.addEventListener('pointerdown', onDocPointerDown, true)
+    })
+  } else {
+    document.removeEventListener('pointerdown', onDocPointerDown, true)
+  }
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
+})
 </script>
 
 <template>
-  <div class="obs-node">
+  <div ref="rootEl" class="obs-node" :class="{ 'obs-node--editing': editing }">
     <div class="obs-node__header">
       <component :is="iconFor(node.icon)" :size="16" :stroke-width="2" class="obs-node__header-icon" />
       <span
         class="obs-node__title nodrag nopan"
-        contenteditable="plaintext-only"
+        :contenteditable="editing ? 'plaintext-only' : 'false'"
         spellcheck="false"
-        :title="'Кликни, чтобы переименовать'"
+        :title="editing ? 'Enter — сохранить, Esc — выйти из правки' : ''"
         @blur="onTitleBlur"
         @keydown="onEnterBlur"
         @mousedown.stop
       >{{ node.title }}</span>
+      <button
+        class="obs-node__edit-btn nodrag nopan"
+        type="button"
+        :title="editing ? 'Готово' : 'Редактировать текст'"
+        @pointerdown.stop
+        @click.stop="onEditToggle"
+      >
+        <component :is="editing ? Check : Pencil" :size="13" :stroke-width="2" />
+      </button>
     </div>
 
     <div v-if="node.rows && node.rows.length" class="obs-node__rows">
@@ -160,7 +217,7 @@ function onEnterBlur(ev: KeyboardEvent) {
         <div class="obs-node__row-text">
           <div
             class="obs-node__row-label nodrag nopan"
-            contenteditable="plaintext-only"
+            :contenteditable="editing ? 'plaintext-only' : 'false'"
             spellcheck="false"
             @blur="onRowLabelBlur(row.id, $event)"
             @keydown="onEnterBlur"
@@ -169,7 +226,7 @@ function onEnterBlur(ev: KeyboardEvent) {
           <div
             v-if="row.value !== undefined"
             class="obs-node__row-value nodrag nopan"
-            contenteditable="plaintext-only"
+            :contenteditable="editing ? 'plaintext-only' : 'false'"
             spellcheck="false"
             @blur="onRowValueBlur(row.id, $event)"
             @keydown="onEnterBlur"
@@ -287,10 +344,14 @@ function onEnterBlur(ev: KeyboardEvent) {
   border-radius: 3px;
   padding: 1px 4px;
   margin: -1px -4px;
+  cursor: default;
+}
+
+.obs-node--editing .obs-node__title {
   cursor: text;
 }
 
-.obs-node__title:hover {
+.obs-node--editing .obs-node__title:hover {
   background: rgba(79, 209, 255, 0.08);
 }
 
@@ -299,6 +360,45 @@ function onEnterBlur(ev: KeyboardEvent) {
   box-shadow: 0 0 0 1px var(--accent-cyan);
   overflow: visible;
   text-overflow: clip;
+}
+
+/* ── Edit button (pencil → check) ──────────────────────── */
+.obs-node__edit-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.obs-node:hover .obs-node__edit-btn,
+.obs-node--editing .obs-node__edit-btn {
+  opacity: 1;
+}
+
+.obs-node__edit-btn:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(79, 209, 255, 0.08);
+}
+
+.obs-node--editing .obs-node__edit-btn {
+  color: var(--accent-green);
+  border-color: color-mix(in oklab, var(--accent-green) 50%, transparent);
+  background: rgba(80, 220, 130, 0.08);
 }
 
 .obs-node__rows {
@@ -340,11 +440,16 @@ function onEnterBlur(ev: KeyboardEvent) {
   border-radius: 3px;
   padding: 1px 4px;
   margin: -1px -4px;
+  cursor: default;
+}
+
+.obs-node--editing .obs-node__row-label,
+.obs-node--editing .obs-node__row-value {
   cursor: text;
 }
 
-.obs-node__row-label:hover,
-.obs-node__row-value:hover {
+.obs-node--editing .obs-node__row-label:hover,
+.obs-node--editing .obs-node__row-value:hover {
   background: rgba(79, 209, 255, 0.08);
 }
 
