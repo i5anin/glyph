@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, inject, ref, type Ref } from 'vue'
 import {
   BaseEdge,
   getBezierPath,
@@ -26,9 +26,25 @@ const props = defineProps<EdgeProps<EdgeData>>()
 
 const { findNode, viewport } = useVueFlow()
 
-const path = computed(() => {
+// ELK bend points are stale the moment a node's dimensions change (collapse,
+// drag, etc.) — using them then produces long diagonals from the current
+// handle position to the now-misaligned bend. Detect that case and fall back
+// to smoothstep, which always adapts to the current handle.
+const collapsedSet = inject<Ref<Set<string>>>('glyph:collapsedNodes')
+
+const bendsAreFresh = computed(() => {
   const bends = props.data?.bends
-  if (bends && bends.length > 0) {
+  if (!bends || bends.length === 0) return false
+  // If either endpoint is currently collapsed, its handle has moved relative
+  // to where ELK computed the bends → polyline would kink ugly.
+  if (collapsedSet?.value?.has(props.source)) return false
+  if (collapsedSet?.value?.has(props.target)) return false
+  return true
+})
+
+const path = computed(() => {
+  if (bendsAreFresh.value) {
+    const bends = props.data!.bends!
     const points = [
       { x: props.sourceX, y: props.sourceY },
       ...bends,

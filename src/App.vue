@@ -201,6 +201,12 @@ function onCardFocus(id: string) {
   graphCanvas.value?.focusNode(id)
 }
 
+// Re-run ELK with the current doc — useful after user drags/collapses make
+// the cached layout look stale (long diagonal edges, overlap).
+function relayout() {
+  void applyFromDoc({ ...currentDoc.value })
+}
+
 function onPickerRemove(id: string) {
   if (graphs.value.length <= 1) return
   const idx = graphs.value.findIndex((g) => g.id === id)
@@ -427,6 +433,7 @@ function onSplitterPointerUp(ev: PointerEvent) {
         @group-patch="onGroupPatch"
         @collapse-all="collapseAll"
         @expand-all="expandAll"
+        @relayout="relayout"
       />
     </main>
   </div>

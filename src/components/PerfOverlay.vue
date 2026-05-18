@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next'
+import { ChevronsDownUp, ChevronsUpDown, RotateCw } from 'lucide-vue-next'
 
 const props = defineProps<{
   nodes: number
@@ -11,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'collapse-all': []
   'expand-all': []
+  relayout: []
 }>()
 
 const fps = ref(0)
@@ -86,6 +87,14 @@ watch(
         @click="emit('expand-all')"
       >
         <ChevronsUpDown :size="12" :stroke-width="2" />
+      </button>
+      <button
+        class="perf-overlay__btn"
+        type="button"
+        title="Пересчитать раскладку (ELK с учётом текущих размеров)"
+        @click="emit('relayout')"
+      >
+        <RotateCw :size="12" :stroke-width="2" />
       </button>
     </div>
   </div>
