@@ -25,6 +25,13 @@ export interface SavedGraph {
 
 const KEY = 'glyph:graphs:v1'
 const CURRENT_KEY = 'glyph:current-graph:v1'
+const SCHEMA_VERSION_KEY = 'glyph:schema-version'
+
+// Bump when seed demos change in a way that the user must see (palette change,
+// new layer, fixed group references). On boot, if the stored version is older,
+// we wipe all seed-tagged graphs from storage and re-seed from source. User
+// graphs (no `seed` tag — those created via "+ New" or duplicate) survive.
+const SCHEMA_VERSION = 3
 
 function newId(): string {
   return (
@@ -66,6 +73,36 @@ function isYamlValid(yaml: string): boolean {
 
 export function loadGraphs(): { graphs: SavedGraph[]; currentId: string } {
   try {
+    // ── Schema-version migration ───────────────────────────────────────
+    // If the stored version is older than the current SCHEMA_VERSION, we
+    // discard any seed-tagged graphs and re-seed. User-owned graphs (no
+    // `seed` tag) are kept untouched.
+    const storedVer = parseInt(
+      localStorage.getItem(SCHEMA_VERSION_KEY) ?? '0',
+      10,
+    )
+    if (storedVer < SCHEMA_VERSION) {
+      const raw = localStorage.getItem(KEY)
+      let userGraphs: SavedGraph[] = []
+      if (raw) {
+        try {
+          const arr = JSON.parse(raw) as SavedGraph[]
+          if (Array.isArray(arr)) userGraphs = arr.filter((g) => !g.seed)
+        } catch {
+          /* fall through */
+        }
+      }
+      const seeded = defaultGraphs()
+      const merged = [...seeded, ...userGraphs]
+      const currentId = seeded[0]!.id
+      persist(merged, currentId)
+      localStorage.setItem(SCHEMA_VERSION_KEY, String(SCHEMA_VERSION))
+      console.info(
+        `[glyph] schema migrated to v${SCHEMA_VERSION} — seeds refreshed (kept ${userGraphs.length} user graph(s))`,
+      )
+      return { graphs: merged, currentId }
+    }
+
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as SavedGraph[]
@@ -130,6 +167,7 @@ export function loadGraphs(): { graphs: SavedGraph[]; currentId: string } {
   }
   const seeded = defaultGraphs()
   persist(seeded, seeded[0]!.id)
+  localStorage.setItem(SCHEMA_VERSION_KEY, String(SCHEMA_VERSION))
   return { graphs: seeded, currentId: seeded[0]!.id }
 }
 

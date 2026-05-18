@@ -13,6 +13,13 @@ import ObstructionNode from './ObstructionNode.vue'
 import FlowEdge from './FlowEdge.vue'
 import JunctionNode from './JunctionNode.vue'
 import GroupNode from './GroupNode.vue'
+import PerfOverlay from './PerfOverlay.vue'
+
+// Auto-enable "perf mode" once the graph has enough elements that the per-edge
+// halo/blur/animation start eating frames. Empirically smooth at 60fps below
+// these thresholds on a mid-tier laptop; above — drop the eye candy.
+const PERF_EDGE_THRESHOLD = 80
+const PERF_NODE_THRESHOLD = 50
 
 const props = defineProps<{
   nodes: Node[]
@@ -52,6 +59,12 @@ const edgeTypes = markRaw({
 
 const nodes = computed(() => props.nodes)
 const edges = computed(() => props.edges)
+
+const perfMode = computed(
+  () =>
+    props.edges.length > PERF_EDGE_THRESHOLD ||
+    props.nodes.length > PERF_NODE_THRESHOLD,
+)
 
 const {
   onNodesInitialized,
@@ -172,13 +185,17 @@ onEdgesChange((changes) => {
 </script>
 
 <template>
-  <div ref="rootEl" class="graph-canvas">
+  <div
+    ref="rootEl"
+    class="graph-canvas"
+    :class="{ 'graph-canvas--perf': perfMode }"
+  >
     <VueFlow
       :nodes="nodes"
       :edges="edges"
       :node-types="nodeTypes"
       :edge-types="edgeTypes"
-      :min-zoom="0.3"
+      :min-zoom="0.05"
       :max-zoom="2"
       :default-viewport="{ x: 0, y: 0, zoom: 0.8 }"
       :nodes-draggable="true"
@@ -187,6 +204,8 @@ onEdgesChange((changes) => {
       :delete-key-code="['Delete', 'Backspace']"
       :elements-selectable="true"
       :select-nodes-on-drag="false"
+      :pan-on-scroll="false"
+      :only-render-visible-elements="true"
     >
       <Background
         pattern-color="var(--bg-grid)"
@@ -196,13 +215,41 @@ onEdgesChange((changes) => {
       />
       <Controls position="bottom-right" />
     </VueFlow>
+    <PerfOverlay
+      :nodes="props.nodes.length"
+      :edges="props.edges.length"
+      :perf="perfMode"
+    />
   </div>
 </template>
 
 <style scoped>
 .graph-canvas {
+  position: relative;
   width: 100%;
   height: 100%;
   background: var(--bg);
+}
+
+/* ── Performance mode ──────────────────────────────────────
+   For big graphs (>80 edges / >50 nodes): drop the per-edge
+   halo + animated flow line, kill blur filters, soften shadows.
+   Keeps the neon look on the active edge color but stops the
+   continuous 60-fps repaint that hammers the GPU. */
+.graph-canvas--perf :deep(.flow-edge__halo),
+.graph-canvas--perf :deep(.flow-edge__flow) {
+  display: none;
+}
+.graph-canvas--perf :deep(.flow-edge__line) {
+  filter: none;
+  stroke-width: 1.5;
+}
+.graph-canvas--perf :deep(.obs-node) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.graph-canvas--perf :deep(.obs-handle--on) {
+  box-shadow:
+    0 0 0 2px var(--node-bg),
+    0 0 4px var(--hc) !important;
 }
 </style>
