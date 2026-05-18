@@ -120,8 +120,8 @@ export function toFlow(doc: ObstructionDoc): FlowGraph {
     const autoW = maxX - minX + PAD * 2
     const autoH = maxY - minY + PAD * 2 + GROUP_HEADER
     groupBox.set(grp.id, {
-      x: minX - PAD,
-      y: minY - PAD - GROUP_HEADER,
+      x: grp.x ?? minX - PAD,
+      y: grp.y ?? minY - PAD - GROUP_HEADER,
       w: grp.width ?? autoW,
       h: grp.height ?? autoH,
     })

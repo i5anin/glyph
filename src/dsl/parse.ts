@@ -95,6 +95,8 @@ function validateGroup(g: unknown, i: number): GroupSpec {
     color: obj.color as GroupSpec['color'],
     width: typeof obj.width === 'number' && obj.width > 0 ? obj.width : undefined,
     height: typeof obj.height === 'number' && obj.height > 0 ? obj.height : undefined,
+    x: typeof obj.x === 'number' ? obj.x : undefined,
+    y: typeof obj.y === 'number' ? obj.y : undefined,
   }
 }
 
