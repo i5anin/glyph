@@ -1,15 +1,26 @@
 // Persistent list of saved graphs (localStorage).
-// Each graph = { id, name, yaml }. The "current" id is also persisted so
+// Each graph = { id, name, yaml, seed? }. The "current" id is also persisted so
 // the same graph re-opens on reload.
+//
+// Seed graphs ship with the app and identify themselves via `seed: string`.
+// User-created or duplicated graphs have no `seed` tag and are never touched
+// on load. Seeds get two automatic conveniences:
+//   1) backfilled if the user's storage doesn't have them yet (new seeds added
+//      after upgrade);
+//   2) rescued if their YAML no longer parses (after an analyzer regen the
+//      stored copy can become inconsistent with the latest demo content).
 
 import { vueAppDemo } from '../demo/vueAppDemo'
 import { pfForumDemo } from '../demo/pfForumDemo'
 import { softPfforumDemo } from '../demo/softPfforumDemo'
+import { parseDsl } from '../dsl/parse'
 
 export interface SavedGraph {
   id: string
   name: string
   yaml: string
+  /** Tag that identifies built-in demo seeds. User graphs leave this empty. */
+  seed?: string
 }
 
 const KEY = 'glyph:graphs:v1'
@@ -23,15 +34,34 @@ function newId(): string {
   )
 }
 
-// Seed graphs that should always be available — if they're missing from
-// localStorage (e.g. user already had the app installed before they were
-// introduced), we inject them on load.
+interface SeedDescriptor {
+  seed: string
+  name: string
+  yaml: string
+}
+
+const SEED_DESCRIPTORS: SeedDescriptor[] = [
+  { seed: 'pfForum', name: 'pf-forum · модули', yaml: pfForumDemo },
+  { seed: 'softPfforum', name: 'soft.pfforum · vue (window-globals)', yaml: softPfforumDemo },
+  { seed: 'vueApp', name: 'Vue app · пример', yaml: vueAppDemo },
+]
+
 function defaultGraphs(): SavedGraph[] {
-  return [
-    { id: newId(), name: 'pf-forum · модули', yaml: pfForumDemo },
-    { id: newId(), name: 'soft.pfforum · vue (window-globals)', yaml: softPfforumDemo },
-    { id: newId(), name: 'Vue app · пример', yaml: vueAppDemo },
-  ]
+  return SEED_DESCRIPTORS.map((s) => ({
+    id: newId(),
+    name: s.name,
+    yaml: s.yaml,
+    seed: s.seed,
+  }))
+}
+
+function isYamlValid(yaml: string): boolean {
+  try {
+    parseDsl(yaml)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function loadGraphs(): { graphs: SavedGraph[]; currentId: string } {
@@ -40,15 +70,54 @@ export function loadGraphs(): { graphs: SavedGraph[]; currentId: string } {
     if (raw) {
       const parsed = JSON.parse(raw) as SavedGraph[]
       if (Array.isArray(parsed) && parsed.length) {
-        // Backfill any new seed graphs that weren't present before.
-        const names = new Set(parsed.map((g) => g.name))
         let mutated = false
-        for (const seed of defaultGraphs()) {
-          if (!names.has(seed.name)) {
-            parsed.push(seed)
+        const seedByName = new Map(SEED_DESCRIPTORS.map((s) => [s.name, s]))
+        const seedByTag = new Map(SEED_DESCRIPTORS.map((s) => [s.seed, s]))
+
+        // Walk existing graphs:
+        //  - back-tag any older seed entries by NAME (so saved graphs from
+        //    pre-`seed` versions get rescued too);
+        //  - rescue any seed whose stored YAML no longer parses by replacing
+        //    it with the current demo source. User-created graphs (no seed
+        //    tag) are NEVER touched.
+        for (let i = 0; i < parsed.length; i++) {
+          const g = parsed[i]!
+          if (!g.seed) {
+            const matched = seedByName.get(g.name)
+            if (matched) {
+              parsed[i] = { ...g, seed: matched.seed }
+              mutated = true
+            }
+          }
+          const after = parsed[i]!
+          if (after.seed && !isYamlValid(after.yaml)) {
+            const fresh = seedByTag.get(after.seed)
+            if (fresh) {
+              parsed[i] = { ...after, yaml: fresh.yaml }
+              mutated = true
+              console.info(
+                `[glyph] seed "${fresh.name}" YAML was broken — restored from source`,
+              )
+            }
+          }
+        }
+
+        // Backfill any seed not yet present.
+        const presentSeeds = new Set(
+          parsed.map((g) => g.seed).filter(Boolean) as string[],
+        )
+        for (const s of SEED_DESCRIPTORS) {
+          if (!presentSeeds.has(s.seed)) {
+            parsed.push({
+              id: newId(),
+              name: s.name,
+              yaml: s.yaml,
+              seed: s.seed,
+            })
             mutated = true
           }
         }
+
         const stored = localStorage.getItem(CURRENT_KEY)
         const currentId =
           parsed.find((g) => g.id === stored)?.id ?? parsed[0]!.id
@@ -96,5 +165,7 @@ export function createBlankGraph(name = 'Новый граф'): SavedGraph {
 }
 
 export function duplicateGraph(src: SavedGraph): SavedGraph {
+  // A duplicate is the user's own graph from then on — drop the seed tag so
+  // it never gets refreshed/rescued from source.
   return { id: newId(), name: src.name + ' (копия)', yaml: src.yaml }
 }
