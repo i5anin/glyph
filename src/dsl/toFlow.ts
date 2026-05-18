@@ -60,11 +60,12 @@ const ROOT_OPTIONS: Record<string, string> = {
 
 const GROUP_PADDING_OPT = `[top=${GROUP_PADDING + GROUP_HEADER},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`
 
-// Inside a compound, members can be packed tight.
+// Inside a compound, members can be packed tighter than the inter-group gap,
+// but not too tight — very small values can confuse BRANDES_KOEPF placement.
 const COMPOUND_OPTIONS: Record<string, string> = {
   'elk.padding': GROUP_PADDING_OPT,
-  'elk.layered.spacing.nodeNodeBetweenLayers': '32',
-  'elk.spacing.nodeNode': '18',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '40',
+  'elk.spacing.nodeNode': '28',
 }
 
 export async function toFlow(
@@ -170,6 +171,35 @@ export async function toFlow(
     for (const child of node.children ?? []) walkAbs(child, ax, ay)
   }
   for (const c of layouted.children ?? []) walkAbs(c, 0, 0)
+
+  // Safety net: any doc.node / junction that didn't get a position from ELK
+  // (network issues, layout edge cases, unexpected hierarchy) gets a default
+  // grid slot so it stays visible instead of vanishing.
+  const missing = doc.nodes.filter((n) => !absPos.has(n.id))
+  if (missing.length > 0) {
+    console.warn(
+      `[glyph] ${missing.length}/${doc.nodes.length} nodes missing from ELK output — placing on fallback grid`,
+    )
+    for (let i = 0; i < missing.length; i++) {
+      const n = missing[i]!
+      absPos.set(n.id, {
+        x: (i % 10) * (NODE_WIDTH + 60),
+        y: Math.floor(i / 10) * 200,
+        w: NODE_WIDTH,
+        h: estimateHeight(n, collapsedSet.has(n.id)),
+      })
+    }
+  }
+  for (const j of junctions) {
+    if (!absPos.has(j.id)) {
+      absPos.set(j.id, {
+        x: 0,
+        y: 0,
+        w: JUNCTION_SIZE,
+        h: JUNCTION_SIZE,
+      })
+    }
+  }
 
   // ─── Edge bend points: translate by their container's offset ─────────────
   // ELK puts an edge under the lowest common ancestor of its endpoints.
