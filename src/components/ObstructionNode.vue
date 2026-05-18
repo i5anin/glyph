@@ -356,17 +356,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="node.footer" class="obs-node__footer">
-      <span class="obs-node__footer-label">{{ node.footer.label }}</span>
-      <span
-        v-if="node.footer.price !== undefined"
-        class="obs-node__footer-price"
-        :style="{ color: colorOf(node.footer.color ?? 'orange') }"
-      >
-        <DollarSign :size="14" :stroke-width="2.5" />
-        {{ node.footer.price }}
-      </span>
-    </div>
   </div>
 </template>
 

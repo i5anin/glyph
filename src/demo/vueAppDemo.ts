@@ -14,7 +14,6 @@ nodes:
       - { id: routes, icon: route,    label: "Маршруты", value: "12", color: cyan,  type: source }
       - { id: stores, icon: database, label: "Сторы",    value: "4",  color: green, type: source }
     progress: { current: 78, max: 100, label: "Init", color: green }
-    footer:   { label: "Улучшить", price: 120 }
 
   - id: router
     title: "Vue Router"
@@ -40,7 +39,6 @@ nodes:
       - { id: req, icon: upload,   label: "Requests",  value: "8.00/s", color: cyan,  type: source }
       - { id: res, icon: download, label: "Responses", value: "7.95/s", color: green, type: target }
     progress: { current: 81, max: 100, color: cyan }
-    footer:   { label: "Boost", price: 500, color: orange }
 
   - id: db
     title: "Database"
