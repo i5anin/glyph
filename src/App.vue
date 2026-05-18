@@ -47,6 +47,12 @@ const currentDoc = shallowRef<ObstructionDoc>({ nodes: [], edges: [] })
 // guard against feedback loops when we programmatically rewrite the textarea
 let syncingFromGraph = false
 
+// When this flag is true on the next applyFromDsl run, all nodes are collapsed
+// by default after layout. Set on initial load and whenever the user picks a
+// different graph — but NOT on YAML edits, since wiping the user's expanded
+// state on every keystroke would be obnoxious.
+let collapseAllOnNextApply = true
+
 async function applyFromDsl(text: string) {
   if (syncingFromGraph) return
   try {
@@ -55,6 +61,10 @@ async function applyFromDsl(text: string) {
     const flow = await toFlow(doc)
     nodes.value = flow.nodes
     edges.value = flow.edges
+    if (collapseAllOnNextApply) {
+      collapsedNodes.value = new Set(doc.nodes.map((n) => n.id))
+      collapseAllOnNextApply = false
+    }
     error.value = null
   } catch (e) {
     if (e instanceof DslError) error.value = e.message
@@ -111,7 +121,10 @@ function onPickerSelect(id: string) {
   currentId.value = id
   persist(graphs.value, id)
   const g = currentGraph()
-  if (g) dslText.value = g.yaml // triggers applyFromDsl via watchDebounced
+  if (g) {
+    collapseAllOnNextApply = true
+    dslText.value = g.yaml // triggers applyFromDsl via watchDebounced
+  }
 }
 
 function onPickerAdd() {
@@ -120,6 +133,7 @@ function onPickerAdd() {
   graphs.value = [...graphs.value, g]
   currentId.value = g.id
   persist(graphs.value, g.id)
+  collapseAllOnNextApply = true
   dslText.value = g.yaml
 }
 
@@ -131,6 +145,7 @@ function onPickerDuplicate(id: string) {
   graphs.value = [...graphs.value, copy]
   currentId.value = copy.id
   persist(graphs.value, copy.id)
+  collapseAllOnNextApply = true
   dslText.value = copy.yaml
 }
 
@@ -217,6 +232,7 @@ function onPickerRemove(id: string) {
   if (wasCurrent) {
     const next = graphs.value[Math.max(0, idx - 1)] ?? graphs.value[0]!
     currentId.value = next.id
+    collapseAllOnNextApply = true
     dslText.value = next.yaml
   }
   persist(graphs.value, currentId.value)
