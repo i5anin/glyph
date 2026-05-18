@@ -58,13 +58,15 @@ async function applyFromDsl(text: string) {
   try {
     const doc = parseDsl(text)
     currentDoc.value = doc
-    const flow = await toFlow(doc)
-    nodes.value = flow.nodes
-    edges.value = flow.edges
+    // Apply the "collapse all" intent BEFORE layout so ELK reserves chip-sized
+    // height for these nodes instead of full-card height (avoids huge gaps).
     if (collapseAllOnNextApply) {
       collapsedNodes.value = new Set(doc.nodes.map((n) => n.id))
       collapseAllOnNextApply = false
     }
+    const flow = await toFlow(doc, collapsedNodes.value)
+    nodes.value = flow.nodes
+    edges.value = flow.edges
     error.value = null
   } catch (e) {
     if (e instanceof DslError) error.value = e.message
@@ -74,7 +76,7 @@ async function applyFromDsl(text: string) {
 
 async function applyFromDoc(next: ObstructionDoc) {
   currentDoc.value = next
-  const flow = await toFlow(next)
+  const flow = await toFlow(next, collapsedNodes.value)
   nodes.value = flow.nodes
   edges.value = flow.edges
   syncingFromGraph = true

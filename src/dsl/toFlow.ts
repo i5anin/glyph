@@ -7,12 +7,14 @@ const ROW_HEIGHT = 44
 const HEADER_HEIGHT = 42
 const PROGRESS_HEIGHT = 48
 const FOOTER_HEIGHT = 48
+// Collapsed-card height: 30px header + 2 compact rows (~20px each + borders)
+const COLLAPSED_HEIGHT = 72
 const JUNCTION_SIZE = 16
-// Inner padding between a group's frame and the bounding box of its members.
-const GROUP_PADDING = 32
+const GROUP_PADDING = 24
 const GROUP_HEADER = 32
 
-function estimateHeight(node: NodeSpec): number {
+function estimateHeight(node: NodeSpec, isCollapsed: boolean): number {
+  if (isCollapsed) return COLLAPSED_HEIGHT
   let h = HEADER_HEIGHT
   h += (node.rows?.length ?? 0) * ROW_HEIGHT
   if (node.progress) h += PROGRESS_HEIGHT
@@ -49,26 +51,26 @@ const ROOT_OPTIONS: Record<string, string> = {
   'elk.edgeRouting': 'ORTHOGONAL',
   'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '90',
-  // Spacing between siblings AT THE SAME hierarchy level — for compounds at
-  // the root level, this is the gap between two GROUPS. Generous so the two
-  // dashed borders never touch.
-  'elk.spacing.nodeNode': '70',
-  'elk.spacing.edgeNode': '24',
-  'elk.spacing.edgeEdge': '14',
+  // Spacing between compound groups (root-level siblings)
+  'elk.layered.spacing.nodeNodeBetweenLayers': '50',
+  'elk.spacing.nodeNode': '40',
+  'elk.spacing.edgeNode': '16',
+  'elk.spacing.edgeEdge': '10',
 }
 
 const GROUP_PADDING_OPT = `[top=${GROUP_PADDING + GROUP_HEADER},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`
 
-// Inside a compound, members can be packed tighter — they're protected by the
-// outer group frame.
+// Inside a compound, members can be packed tight.
 const COMPOUND_OPTIONS: Record<string, string> = {
   'elk.padding': GROUP_PADDING_OPT,
-  'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-  'elk.spacing.nodeNode': '32',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '32',
+  'elk.spacing.nodeNode': '18',
 }
 
-export async function toFlow(doc: ObstructionDoc): Promise<FlowGraph> {
+export async function toFlow(
+  doc: ObstructionDoc,
+  collapsedSet: Set<string> = new Set(),
+): Promise<FlowGraph> {
   const groups = doc.groups ?? []
   const junctions = doc.junctions ?? []
   const junctionIds = new Set(junctions.map((j) => j.id))
@@ -87,7 +89,7 @@ export async function toFlow(doc: ObstructionDoc): Promise<FlowGraph> {
     const child: ElkNode = {
       id: n.id,
       width: NODE_WIDTH,
-      height: estimateHeight(n),
+      height: estimateHeight(n, collapsedSet.has(n.id)),
     }
     if (n.group && groupIds.has(n.group)) {
       compoundChildren.get(n.group)!.push(child)
