@@ -43,18 +43,26 @@ const node = computed(() => props.data)
 
 const { edges, updateNodeInternals } = useVueFlow()
 
-// ─── Collapse state ───────────────────────────────────────────────────────
-// Local UI state — when true, function rows are dropped from DOM and only
-// the in/deps summary rows remain (those still need DOM because edges hook
-// into their handles). Persists across DSL edits because vue-flow keeps the
-// component instance alive while the node id is stable.
-const collapsed = ref(false)
+// ─── Collapse state (centralized in App.vue) ─────────────────────────────
+// Reads from a shared Set<id>. Clicking the chevron defers to the App-level
+// toggle so cascading collapse (root → all downstream) is consistent.
+const collapsedSet = inject<Ref<Set<string>>>('glyph:collapsedNodes')
+const toggleNodeCollapsed = inject<(id: string) => void>(
+  'glyph:toggleNodeCollapsed',
+)
+
+const collapsed = computed(() => collapsedSet?.value.has(props.id) ?? false)
 
 function toggleCollapse() {
-  collapsed.value = !collapsed.value
-  // Tell vue-flow the node's dimensions changed so it re-routes edges.
-  nextTick(() => updateNodeInternals(props.id))
+  toggleNodeCollapsed?.(props.id)
 }
+
+// Whenever this node's collapsed state flips (either from local toggle or
+// because someone called "collapse all" / cascaded into us), tell vue-flow
+// to re-measure dimensions and re-route the edges.
+watch(collapsed, () => {
+  nextTick(() => updateNodeInternals(props.id))
+})
 
 const visibleRows = computed(() => {
   const rows = node.value.rows ?? []
@@ -66,20 +74,6 @@ const hiddenRowCount = computed(() => {
   const total = node.value.rows?.length ?? 0
   return Math.max(0, total - visibleRows.value.length)
 })
-
-// React to the global "collapse all / expand all" signal.
-const bulkCollapse = inject<Ref<{ id: number; collapsed: boolean }>>(
-  'glyph:bulkCollapse',
-)
-if (bulkCollapse) {
-  watch(
-    () => bulkCollapse.value.id,
-    () => {
-      collapsed.value = bulkCollapse.value.collapsed
-      nextTick(() => updateNodeInternals(props.id))
-    },
-  )
-}
 
 const connectedHandleIds = computed(() => {
   const set = new Set<string>()
@@ -459,9 +453,54 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+/* ── Mini / collapsed presentation ──────────────────────────
+   Goal: turn a tall node into a chip so big graphs read at a glance.
+   Function rows are already dropped from DOM by `visibleRows`.
+   Here we additionally squeeze the header and the in/deps strip. */
 .obs-node--collapsed {
-  /* visually distinguish — slightly less prominent border */
-  opacity: 0.92;
+  opacity: 0.96;
+}
+
+.obs-node--collapsed .obs-node__header {
+  height: 30px;
+  padding: 0 8px;
+  gap: 6px;
+}
+
+.obs-node--collapsed .obs-node__header-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.obs-node--collapsed .obs-node__title {
+  font-size: 12px;
+}
+
+.obs-node--collapsed .obs-node__row {
+  min-height: 20px;
+  padding: 2px 24px;
+  grid-template-columns: 14px 1fr auto;
+  gap: 4px;
+}
+
+.obs-node--collapsed .obs-node__row-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.obs-node--collapsed .obs-node__row-label {
+  /* "imported by" / "uses" — too verbose when miniaturized */
+  display: none;
+}
+
+.obs-node--collapsed .obs-node__row-value {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.obs-node--collapsed .obs-handle {
+  width: 10px !important;
+  height: 10px !important;
 }
 
 /* ── Edit button (pencil → check) ──────────────────────── */

@@ -130,20 +130,49 @@ function onPickerRename(id: string, name: string) {
   persist(graphs.value, currentId.value)
 }
 
-// ─── Bulk collapse signal (broadcasts to all ObstructionNode instances) ──
-// Counter `id` increments so the watcher fires even when `collapsed` value
-// doesn't actually change between two clicks.
-const bulkCollapse = ref<{ id: number; collapsed: boolean }>({
-  id: 0,
-  collapsed: false,
-})
-provide('glyph:bulkCollapse', bulkCollapse)
+// ─── Centralized collapse state ──────────────────────────────────────────
+// Source of truth = a reactive Set of node ids that are currently collapsed.
+// Each ObstructionNode injects this set + a toggle action. We replace the
+// Set instance on every change so the .has() result stays reactive.
+const collapsedNodes = ref<Set<string>>(new Set())
+provide('glyph:collapsedNodes', collapsedNodes)
+
+function computeDownstream(rootId: string): Set<string> {
+  const out = new Set<string>([rootId])
+  const queue = [rootId]
+  while (queue.length) {
+    const cur = queue.shift()!
+    for (const e of currentDoc.value.edges) {
+      const from = e.from.split('.')[0]
+      const to = e.to.split('.')[0]
+      if (from === cur && to && !out.has(to)) {
+        out.add(to)
+        queue.push(to)
+      }
+    }
+  }
+  return out
+}
+
+// Click on a node's chevron:
+//   currently expanded  → collapse THIS node + every descendant (cascade)
+//   currently collapsed → expand THIS one node only (user drills back in)
+function toggleNodeCollapsed(id: string) {
+  const next = new Set(collapsedNodes.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    for (const d of computeDownstream(id)) next.add(d)
+  }
+  collapsedNodes.value = next
+}
+provide('glyph:toggleNodeCollapsed', toggleNodeCollapsed)
 
 function collapseAll() {
-  bulkCollapse.value = { id: bulkCollapse.value.id + 1, collapsed: true }
+  collapsedNodes.value = new Set(currentDoc.value.nodes.map((n) => n.id))
 }
 function expandAll() {
-  bulkCollapse.value = { id: bulkCollapse.value.id + 1, collapsed: false }
+  collapsedNodes.value = new Set()
 }
 
 function onPickerRemove(id: string) {
