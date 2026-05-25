@@ -241,16 +241,36 @@ function onLeave() {
 </template>
 
 <style>
-.flow-edge {
-  transition: opacity 0.15s ease;
+/* Все провода всегда видны на полную интенсивность. Никаких --dim,
+   --linked, hover-эффектов: dim/highlight только мешали пользователю
+   читать общую картину связей. Простая 2px линия + лёгкий glow + halo. */
+
+.vue-flow__edge g.flow-edge {
+  opacity: 1;
 }
 
-/* Hover-связка: ребро касается наведённой ноды — подсветить и усилить */
-.flow-edge--linked .flow-edge__line { stroke-width: 3; }
-.flow-edge--linked .flow-edge__halo { opacity: 0.4; }
+.vue-flow__edge g.flow-edge .flow-edge__line {
+  stroke-width: 2;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px currentColor);
+}
 
-/* Hover-связка: ребро не имеет отношения — приглушить */
-.flow-edge--dim { opacity: 0.18; }
+.vue-flow__edge g.flow-edge .flow-edge__halo {
+  opacity: 0.18;
+}
+
+.vue-flow__edge g.flow-edge .flow-edge__flow {
+  opacity: 1;
+  animation: flow-stream 0.9s linear infinite;
+}
+
+/* Классы --linked / --dim больше не вешают эффектов — оставляем no-op,
+   чтобы их установка из ObstructionNode/FlowEdge не ломала layout. */
+.vue-flow__edge g.flow-edge.flow-edge--dim,
+.vue-flow__edge g.flow-edge.flow-edge--linked,
+.vue-flow__edge g.flow-edge:hover {
+  opacity: 1;
+}
 
 .flow-edge__hit {
   pointer-events: stroke;
