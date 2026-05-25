@@ -72,6 +72,9 @@ const ROOT_OPTIONS: Record<string, string> = {
   'elk.partitioning.activate': 'true',
 
   // Longest-path: каждая нода сидит на максимальной дистанции от entry.
+  // LONGEST_PATH + per-node `layerChoiceConstraint` (см. ниже): когда у
+  // ноды есть FSD-tier — она прибивается к слою N, longest-path
+  // вычисляет позицию ТОЛЬКО для остальных.
   'elk.layered.layering.strategy': 'LONGEST_PATH',
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
   'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
@@ -131,9 +134,151 @@ const OPTIMIZE_OPTIONS: Record<string, string> = {
   'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
 }
 
+// ─── FSD (Feature-Sliced Design) layer ordering ──────────────────────────
+// Каноничные слои FSD сверху вниз: app → processes → pages → widgets →
+// features → entities → shared. В графе зависимостей это слева направо
+// (app тянет shared, не наоборот). Если у ноды `group` сматчился по
+// одному из паттернов — её партиция пиннится к этому FSD-тиру, перебивая
+// longest-path. Это даёт чистые «вертикальные ленты» по архитектуре, а
+// не по случайной цепочке зависимостей.
+const FSD_LAYER_PATTERNS: { tier: number; match: RegExp }[] = [
+  { tier: 0, match: /^(app|application|main|root|entry|entries|template|templates)(_|$|-)/i },
+  { tier: 1, match: /^(processes|process|flows)(_|$|-)/i },
+  { tier: 2, match: /^(pages|page|views|screens)(_|$|-)/i },
+  { tier: 3, match: /^(widgets|widget|panels)(_|$|-)/i },
+  { tier: 4, match: /^(features|feature|fts)(_|$|-)/i },
+  { tier: 5, match: /^(entities|entity|models|domain)(_|$|-)/i },
+  { tier: 6, match: /^(shared|lib|libs|library|libraries|kit|ui|api|stores|store|misc|utils|util|helpers|plugins|vendor|core)(_|$|-)/i },
+]
+
+function fsdTierOf(groupId: string | undefined): number | undefined {
+  if (!groupId) return undefined
+  for (const { tier, match } of FSD_LAYER_PATTERNS) {
+    if (match.test(groupId)) return tier
+  }
+  return undefined
+}
+
 export interface ToFlowOptions {
   /** Run ELK with the high-thoroughness "optimize paths" profile. */
   optimize?: boolean
+}
+
+/**
+ * Manual FSD-tier layout: бесповоротно строгие колонки по FSD-слоям.
+ * X = fsdTier * COL_WIDTH, Y = индекс в стопке тира × ROW_HEIGHT.
+ * Не зовём ELK — рёбра отдаются vue-flow для smoothstep-рендеринга.
+ * Срабатывает только если в DSL у всех узлов есть FSD-распознаваемая
+ * группа; иначе fallback на ELK-layout.
+ */
+function tryFsdLayout(
+  doc: ObstructionDoc,
+  collapsedSet: Set<string>,
+): FlowGraph | null {
+  const junctions = doc.junctions ?? []
+  const junctionIds = new Set(junctions.map((j) => j.id))
+
+  // Все ли узлы и junction'ы укладываются в FSD?
+  const nodeTier = new Map<string, number>()
+  for (const n of doc.nodes) {
+    const t = fsdTierOf(n.group)
+    if (t === undefined) return null
+    nodeTier.set(n.id, t)
+  }
+  for (const j of junctions) {
+    const t = fsdTierOf(j.group)
+    if (t === undefined) return null
+    nodeTier.set(j.id, t)
+  }
+
+  const COL_WIDTH = NODE_WIDTH + 220
+  const ROW_GAP = 16
+
+  // Группируем по тиру, сохраняя порядок появления в DSL.
+  const byTier = new Map<number, string[]>()
+  for (const n of doc.nodes) {
+    const t = nodeTier.get(n.id)!
+    if (!byTier.has(t)) byTier.set(t, [])
+    byTier.get(t)!.push(n.id)
+  }
+  for (const j of junctions) {
+    const t = nodeTier.get(j.id)!
+    if (!byTier.has(t)) byTier.set(t, [])
+    byTier.get(t)!.push(j.id)
+  }
+
+  // Position map: id → {x, y}
+  const pos = new Map<string, { x: number; y: number }>()
+  for (const [t, ids] of byTier) {
+    const x = t * COL_WIDTH
+    let y = 0
+    for (const id of ids) {
+      const isJunction = junctionIds.has(id)
+      const node = doc.nodes.find((n) => n.id === id)
+      const h = isJunction
+        ? JUNCTION_SIZE
+        : estimateHeight(node!, collapsedSet.has(id))
+      pos.set(id, { x: isJunction ? x + (NODE_WIDTH - JUNCTION_SIZE) / 2 : x, y })
+      y += h + ROW_GAP
+    }
+  }
+
+  const flowNodes: Node[] = []
+  for (const n of doc.nodes) {
+    const p = pos.get(n.id)!
+    flowNodes.push({
+      id: n.id,
+      type: 'obstruction',
+      position: { x: p.x, y: p.y },
+      data: n,
+      style: { width: `${NODE_WIDTH}px` },
+    })
+  }
+  for (const j of junctions) {
+    const p = pos.get(j.id)!
+    flowNodes.push({
+      id: j.id,
+      type: 'junction',
+      position: { x: p.x, y: p.y },
+      data: j,
+      style: { width: `${JUNCTION_SIZE}px`, height: `${JUNCTION_SIZE}px` },
+    })
+  }
+
+  // Edges — smoothstep, без ELK-bends (data.bends отсутствует → fallback).
+  const edges: Edge[] = doc.edges.map((e, i) => {
+    const from = parseEndpoint(e.from, junctionIds)
+    const to = parseEndpoint(e.to, junctionIds)
+    let sourceHandle: string
+    let targetHandle: string
+    if (from.kind === 'junction') {
+      const side = from.rowOrSide && from.rowOrSide !== 'auto' ? from.rowOrSide : 'r'
+      sourceHandle = `${side}-source`
+    } else {
+      sourceHandle = `${from.rowOrSide}-source`
+    }
+    if (to.kind === 'junction') {
+      const side = to.rowOrSide && to.rowOrSide !== 'auto' ? to.rowOrSide : 'l'
+      targetHandle = `${side}-target`
+    } else {
+      targetHandle = `${to.rowOrSide}-target`
+    }
+    return {
+      id: `e${i}-${e.from}->${e.to}`,
+      source: from.nodeId,
+      sourceHandle,
+      target: to.nodeId,
+      targetHandle,
+      type: 'flow',
+      data: {
+        color: e.color ?? 'cyan',
+        label: e.label,
+        shape: e.shape ?? 'smoothstep',
+      },
+    }
+  })
+
+  return { nodes: flowNodes, edges }
 }
 
 export async function toFlow(
@@ -141,6 +286,12 @@ export async function toFlow(
   collapsedSet: Set<string> = new Set(),
   opts: ToFlowOptions = {},
 ): Promise<FlowGraph> {
+  // FSD shortcut: если все узлы укладываются в FSD-слои — кладём вручную
+  // строгими колонками, ELK не вызываем. Это даёт максимально предсказуемый
+  // и «WoT-tech-tree-style» layout: pages | widgets | features | entities | shared.
+  const fsd = tryFsdLayout(doc, collapsedSet)
+  if (fsd) return fsd
+
   const rootOptions = opts.optimize ? OPTIMIZE_OPTIONS : ROOT_OPTIONS
   const groups = doc.groups ?? []
   const junctions = doc.junctions ?? []
@@ -165,11 +316,23 @@ export async function toFlow(
     const noIncoming = !incoming.has(n.id)
     if (isMarked || noIncoming) entryIds.add(n.id)
   }
-  // Per-node explicit partition wins over auto-computed longest-path.
+  // Per-node explicit partition (winning over auto-LP) — три источника:
+  //   1. `n.partition` явно задана в DSL,
+  //   2. `n.entry: true` → 0,
+  //   3. FSD-слой группы узла (app=0, pages=2, widgets=3, …, shared=6).
+  // Junctions тоже могут быть в группе → их FSD-тир тоже учитывается.
   const nodePartition = new Map<string, number>()
   for (const n of doc.nodes) {
     if (typeof n.partition === 'number') nodePartition.set(n.id, n.partition)
     else if (n.entry === true) nodePartition.set(n.id, 0)
+    else {
+      const fsd = fsdTierOf(n.group)
+      if (fsd !== undefined) nodePartition.set(n.id, fsd)
+    }
+  }
+  for (const j of junctions) {
+    const fsd = fsdTierOf(j.group)
+    if (fsd !== undefined) nodePartition.set(j.id, fsd)
   }
 
   // ─── Longest-path tier computation (WoT tech-tree look) ─────────────────
@@ -224,24 +387,34 @@ export async function toFlow(
   // ─── Build ELK input: всё плоско, без compound-обёрток групп ─────────────
   // Группы остаются метаданными (для цвета/фильтра), но НЕ создают
   // ELK-компаундов — иначе колонки-тиры разваливаются.
+  //
+  // Чтобы получить СТРОГИЕ tier-колонки (FSD-look), используем два
+  // механизма ELK:
+  //   1. `elk.layered.layering.layerChoiceConstraint` — per-node hard pin
+  //      к конкретному номеру слоя. Это «прибивает» ноду к колонке.
+  //   2. `elk.partitioning.partition` — мягкое подтверждение порядка.
   const freeChildren: ElkNode[] = []
   for (const n of doc.nodes) {
+    const t = tier.get(n.id) ?? 0
     freeChildren.push({
       id: n.id,
       width: NODE_WIDTH,
       height: estimateHeight(n, collapsedSet.has(n.id)),
       layoutOptions: {
-        'elk.partitioning.partition': String(tier.get(n.id) ?? 0),
+        'elk.layered.layering.layerChoiceConstraint': String(t),
+        'elk.partitioning.partition': String(t),
       },
     })
   }
   for (const j of junctions) {
+    const t = tier.get(j.id) ?? 0
     freeChildren.push({
       id: j.id,
       width: JUNCTION_SIZE,
       height: JUNCTION_SIZE,
       layoutOptions: {
-        'elk.partitioning.partition': String(tier.get(j.id) ?? 0),
+        'elk.layered.layering.layerChoiceConstraint': String(t),
+        'elk.partitioning.partition': String(t),
       },
     })
   }

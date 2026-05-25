@@ -5,7 +5,7 @@ import type { Connection, Edge, Node } from '@vue-flow/core'
 import { ChevronLeft, PanelLeft } from 'lucide-vue-next'
 import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
-import { autoClusterByReachability } from './dsl/autoCluster'
+import { clusterIfNeeded } from './dsl/autoCluster'
 import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
 import type { NodeSpec, ObstructionDoc } from './dsl/schema'
 import {
@@ -20,7 +20,7 @@ import DslEditor from './components/DslEditor.vue'
 import GraphPicker from './components/GraphPicker.vue'
 import CardsListView from './components/CardsListView.vue'
 
-// ─── TODO: Left-panel display mode (persisted) ─────────────────────────────────
+// ─── Left-panel display mode (persisted) ─────────────────────────────────
 type LeftMode = 'yaml' | 'cards'
 const LEFT_MODE_KEY = 'glyph:left-mode'
 const leftMode = ref<LeftMode>(
@@ -152,7 +152,7 @@ async function applyFromDsl(text: string) {
     // nodes they reach exclusively go into the entry's group, multi-used
     // helpers go into "_shared". The original `doc` in currentDoc stays
     // untouched — only render uses the clustered view.
-    const clustered = autoClusterByReachability(doc)
+    const clustered = clusterIfNeeded(doc)
     const flow = await toFlow(clustered, collapsedNodes.value)
     nodes.value = flow.nodes
     edges.value = flow.edges
@@ -165,7 +165,7 @@ async function applyFromDsl(text: string) {
 
 async function applyFromDoc(next: ObstructionDoc) {
   currentDoc.value = next
-  const clustered = autoClusterByReachability(next)
+  const clustered = clusterIfNeeded(next)
   const flow = await toFlow(clustered, collapsedNodes.value)
   nodes.value = flow.nodes
   edges.value = flow.edges
@@ -319,7 +319,7 @@ function relayout() {
 async function optimizePaths() {
   const next = { ...currentDoc.value }
   currentDoc.value = next
-  const clustered = autoClusterByReachability(next)
+  const clustered = clusterIfNeeded(next)
   const flow = await toFlow(clustered, collapsedNodes.value, { optimize: true })
   nodes.value = flow.nodes
   edges.value = flow.edges

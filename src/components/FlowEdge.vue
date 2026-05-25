@@ -53,10 +53,13 @@ const isLinked = computed(() => isOnHover.value === true)
 const bendsAreFresh = computed(() => {
   const bends = props.data?.bends
   if (!bends || bends.length === 0) return false
-  // ELK уже знает collapsed-высоты (toFlow.estimateHeight). Раньше тут
-  // дополнительно отбрасывали bends при свёрнутых концах, но т.к.
-  // по дефолту свёрнуто ВСЁ — это полностью обнуляло ELK routing и
-  // вместо WoT-tree рендерился smoothstep на все 250 рёбер. Доверяем ELK.
+  // Если хоть один конец свёрнут — рендерим smoothstep вместо ELK polyline.
+  // Причина: handle source-Y часто чуть отличается от target-Y, ORTHOGONAL
+  // маршрут ELK добавляет мелкие ступеньки которые на короткой дистанции
+  // визуально режут глаз (юзер: «не должны быть ступенчатыми»).
+  // Smoothstep сглаживает разницу Y одной плавной дугой.
+  if (collapsedSet?.value?.has(props.source)) return false
+  if (collapsedSet?.value?.has(props.target)) return false
   return true
 })
 

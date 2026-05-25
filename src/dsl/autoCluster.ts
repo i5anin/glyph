@@ -28,6 +28,27 @@ const SHARED_GROUP_ID = '_shared'
 const SHARED_GROUP_TITLE = 'shared · общие компоненты'
 const ENTRY_PATTERN = /^form\d+\.php$|-app\.js$|^_render\.php$/
 
+// Узнать, проектируется ли DSL по FSD-методологии (Feature-Sliced Design).
+// Если хоть одна группа называется как FSD-слой — autoCluster надо
+// пропустить, иначе он сотрёт `pages`/`widgets`/`shared` в синтетические
+// `_entry__*` / `_shared`, и FSD-партиционирование в toFlow.ts не сработает.
+const FSD_GROUP_PATTERN =
+  /^(app|application|main|root|entry|entries|template|templates|processes|process|flows|pages|page|views|screens|widgets|widget|panels|features|feature|fts|entities|entity|models|domain|shared|lib|libs|library|libraries|kit|ui|api|stores|store|misc|utils|util|helpers|plugins|vendor|core)(_|$|-)/i
+
+export function hasFsdGroups(doc: ObstructionDoc): boolean {
+  return (doc.groups ?? []).some((g) => FSD_GROUP_PATTERN.test(g.id))
+}
+
+/**
+ * Прозрачная обёртка: если документ уже расписан по FSD-слоям —
+ * возвращаем его без изменений (toFlow.ts сам положит партиции по FSD).
+ * Иначе запускаем reachability-кластеризацию.
+ */
+export function clusterIfNeeded(doc: ObstructionDoc): ObstructionDoc {
+  if (hasFsdGroups(doc)) return doc
+  return autoClusterByReachability(doc)
+}
+
 const PALETTE: AccentColor[] = ['cyan', 'green', 'magenta', 'orange', 'yellow']
 
 interface ClusterResult extends ObstructionDoc {
