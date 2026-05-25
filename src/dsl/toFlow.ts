@@ -141,14 +141,18 @@ const OPTIMIZE_OPTIONS: Record<string, string> = {
 // одному из паттернов — её партиция пиннится к этому FSD-тиру, перебивая
 // longest-path. Это даёт чистые «вертикальные ленты» по архитектуре, а
 // не по случайной цепочке зависимостей.
+// Канонический FSD: app → pages → widgets → features → entities → shared.
+// `pages` стоит у нас на tier 0 наравне с `app` потому что в legacy
+// PHP+Vue стэках именно PHP-страницы — реальные точки входа (URL → PHP
+// рендерит HTML → грузит Vue bundles). Vue entry apps (group `template`)
+// идут уровнем правее как контроллеры этих страниц.
 const FSD_LAYER_PATTERNS: { tier: number; match: RegExp }[] = [
-  { tier: 0, match: /^(app|application|main|root|entry|entries|template|templates)(_|$|-)/i },
-  { tier: 1, match: /^(processes|process|flows)(_|$|-)/i },
-  { tier: 2, match: /^(pages|page|views|screens)(_|$|-)/i },
-  { tier: 3, match: /^(widgets|widget|panels)(_|$|-)/i },
-  { tier: 4, match: /^(features|feature|fts)(_|$|-)/i },
-  { tier: 5, match: /^(entities|entity|models|domain)(_|$|-)/i },
-  { tier: 6, match: /^(shared|lib|libs|library|libraries|kit|ui|api|stores|store|misc|utils|util|helpers|plugins|vendor|core)(_|$|-)/i },
+  { tier: 0, match: /^(app|application|main|root|pages|page|views|screens|routes)(_|$|-)/i },
+  { tier: 1, match: /^(template|templates|entry|entries|processes|process|flows)(_|$|-)/i },
+  { tier: 2, match: /^(widgets|widget|panels)(_|$|-)/i },
+  { tier: 3, match: /^(features|feature|fts)(_|$|-)/i },
+  { tier: 4, match: /^(entities|entity|models|domain)(_|$|-)/i },
+  { tier: 5, match: /^(shared|lib|libs|library|libraries|kit|ui|api|stores|store|misc|utils|util|helpers|plugins|vendor|core)(_|$|-)/i },
 ]
 
 function fsdTierOf(groupId: string | undefined): number | undefined {
@@ -178,15 +182,38 @@ function tryFsdLayout(
   const junctions = doc.junctions ?? []
   const junctionIds = new Set(junctions.map((j) => j.id))
 
+  // Какой tier у группы — приоритет:
+  //   1. group.partition в DSL (явно указано),
+  //   2. имя группы матчит FSD-паттерн.
+  const groupTier = new Map<string, number>()
+  for (const g of doc.groups ?? []) {
+    if (typeof g.partition === 'number') {
+      groupTier.set(g.id, g.partition)
+      continue
+    }
+    const t = fsdTierOf(g.id)
+    if (t !== undefined) groupTier.set(g.id, t)
+  }
+
+  // Получить tier для конкретной ноды/junction. Сначала explicit `partition`
+  // на самой ноде, потом tier её группы.
+  const tierForNode = (
+    nodeOrJunction: { partition?: number; group?: string },
+  ): number | undefined => {
+    if (typeof nodeOrJunction.partition === 'number') return nodeOrJunction.partition
+    if (nodeOrJunction.group) return groupTier.get(nodeOrJunction.group)
+    return undefined
+  }
+
   // Все ли узлы и junction'ы укладываются в FSD?
   const nodeTier = new Map<string, number>()
   for (const n of doc.nodes) {
-    const t = fsdTierOf(n.group)
+    const t = tierForNode(n)
     if (t === undefined) return null
     nodeTier.set(n.id, t)
   }
   for (const j of junctions) {
-    const t = fsdTierOf(j.group)
+    const t = tierForNode(j)
     if (t === undefined) return null
     nodeTier.set(j.id, t)
   }
