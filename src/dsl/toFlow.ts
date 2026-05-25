@@ -11,8 +11,6 @@ const FOOTER_HEIGHT = 48
 // Collapsed-card height: 30px header + 2 compact rows (~20px each + borders)
 const COLLAPSED_HEIGHT = 72
 const JUNCTION_SIZE = 16
-const GROUP_PADDING = 24
-const GROUP_HEADER = 32
 
 function estimateHeight(node: NodeSpec, isCollapsed: boolean): number {
   if (isCollapsed) return COLLAPSED_HEIGHT
@@ -45,24 +43,20 @@ function parseEndpoint(
 const elk = new ELK()
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAYOUT STRATEGY (rewritten for dense graphs like soft.pfforum: 90 / 250+).
+// LAYOUT STRATEGY — World of Tanks tech-tree look.
 //
-// The old INCLUDE_CHILDREN strategy tried to layer *everything globally* in a
-// single pass. With 250 edges crossing group boundaries that collapses into
-// a hairball — what you saw on the pfforum screenshot.
+// Главная идея: строгие колонки-тиры слева направо.
+//   • Каждая нода получает явный `elk.partitioning.partition` — её longest-
+//     path-distance от любой entry-ноды. Тир 0 = entries, тир N = самая
+//     длинная цепочка зависимостей.
+//   • Группы НЕ создают компаунд-обёрток на ELK-уровне (компаунды ломали
+//     выравнивание колонок и плодили hairball). Группы остаются метаданными,
+//     визуально не рендерятся как контейнеры.
+//   • Layered LR + LONGEST_PATH + BRANDES_KOEPF + IMPROVE_STRAIGHTNESS даёт
+//     минимум изломов и пересечений внутри колонки.
 //
-// New plan:
-//   • ROOT lays out groups + ungrouped nodes as black-box rectangles using
-//     `layered` LR. Cross-group edges go through whitespace between groups,
-//     not through their interiors.
-//   • Each GROUP runs its own `layered` LR pass internally. The compound's
-//     bounding box is opaque to the root pass.
-//   • SEPARATE_CHILDREN is the default when hierarchyHandling is unset, so
-//     we just don't set it.
-//
-// thoroughness is dialed back to 10 (from 100). On 90 nodes the 100-level
-// search runs 2-3s per relayout. 10 is the sweet spot: still much better
-// crossings than the default 7, runs in <500ms.
+// Если потом захочется вернуть compound-режим — см. git history до коммита,
+// где появился computeTierPartitions().
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ROOT_OPTIONS: Record<string, string> = {
@@ -70,36 +64,34 @@ const ROOT_OPTIONS: Record<string, string> = {
   'elk.direction': 'RIGHT',
   'elk.edgeRouting': 'ORTHOGONAL',
 
-  // ONE global layered LR pass through groups + their children. Crosses
-  // group boundaries cleanly, gives the WoT tech-tree look: entries at
-  // layer 0, each descendant pushed right by its longest path from root.
-  'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+  // Жёсткие тиры. Партиция выставляется per-node ниже (longest-path).
   'elk.partitioning.activate': 'true',
 
-  // Tree-style layering: every node sits at its longest distance from root
+  // Longest-path: каждая нода сидит на максимальной дистанции от entry.
   'elk.layered.layering.strategy': 'LONGEST_PATH',
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
   'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
   'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
 
   // Crossing reduction
-  'elk.layered.thoroughness': '15',
+  'elk.layered.thoroughness': '20',
   'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
   'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
   'elk.layered.cycleBreaking.strategy': 'GREEDY',
   'elk.layered.unnecessaryBendpoints': 'true',
 
-  // Generous spacing — tier columns clearly separated
-  'elk.layered.spacing.nodeNodeBetweenLayers': '140',
-  'elk.spacing.nodeNode': '40',
-  'elk.spacing.edgeNode': '24',
+  // Колонки-тиры широко разнесены, между нодами внутри колонки воздух
+  // (как в WoT: колонка тира большая, ряды танков с хорошим зазором).
+  'elk.layered.spacing.nodeNodeBetweenLayers': '200',
+  'elk.spacing.nodeNode': '36',
+  'elk.spacing.edgeNode': '28',
   'elk.spacing.edgeEdge': '14',
-  'elk.layered.spacing.edgeNodeBetweenLayers': '32',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '40',
   'elk.layered.spacing.edgeEdgeBetweenLayers': '18',
 
-  // Disconnected subgraphs side-by-side
+  // Несвязные подграфы — рядом, не один над другим.
   'elk.separateConnectedComponents': 'true',
-  'elk.spacing.componentComponent': '120',
+  'elk.spacing.componentComponent': '60',
 }
 
 // «Оптимизация путей» — отдельный профиль с агрессивным crossing-minimization,
@@ -135,52 +127,6 @@ const OPTIMIZE_OPTIONS: Record<string, string> = {
   'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
 }
 
-const GROUP_PADDING_OPT = `[top=${GROUP_PADDING + GROUP_HEADER},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`
-
-// Compound (group) layout — явно прописываем алгоритм, направление и routing,
-// чтобы ELK не использовал дефолты для контейнеров (которые могут отличаться
-// от root и приводить к перекрытию). Spacing внутри плотнее, чем между
-// группами наверху.
-// Inside a compound group: layered LR, tier columns, denser than root
-// (groups should feel like a self-contained subgraph, not waste of space).
-const COMPOUND_OPTIONS: Record<string, string> = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'RIGHT',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.padding': GROUP_PADDING_OPT,
-
-  'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
-  'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-  'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
-  'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
-
-  'elk.layered.thoroughness': '10',
-  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-  'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
-  'elk.layered.unnecessaryBendpoints': 'true',
-
-  'elk.layered.spacing.nodeNodeBetweenLayers': '70',
-  'elk.spacing.nodeNode': '24',
-  'elk.spacing.edgeNode': '18',
-  'elk.spacing.edgeEdge': '12',
-}
-
-// «Оптимизация» внутри компаунда — те же агрессивные опции, но spacing
-// внутри плотнее, чем на root-уровне (иначе группы раздуваются непомерно).
-const COMPOUND_OPTIMIZE_OPTIONS: Record<string, string> = {
-  ...COMPOUND_OPTIONS,
-  'elk.layered.thoroughness': '100',
-  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-  'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
-  'elk.layered.unnecessaryBendpoints': 'true',
-  'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
-  'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
-  'elk.spacing.edgeEdge': '14',
-  'elk.spacing.edgeNode': '20',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-  'elk.layered.spacing.edgeNodeBetweenLayers': '22',
-}
-
 export interface ToFlowOptions {
   /** Run ELK with the high-thoroughness "optimize paths" profile. */
   optimize?: boolean
@@ -195,7 +141,6 @@ export async function toFlow(
   const groups = doc.groups ?? []
   const junctions = doc.junctions ?? []
   const junctionIds = new Set(junctions.map((j) => j.id))
-  const groupIds = new Set(groups.map((g) => g.id))
 
   // ─── Entry detection ─────────────────────────────────────────────────────
   // A node is an "entry" (root of the dependency tree) if either:
@@ -216,109 +161,89 @@ export async function toFlow(
     const noIncoming = !incoming.has(n.id)
     if (isMarked || noIncoming) entryIds.add(n.id)
   }
-  // A group is an "entry group" iff:
-  //   • it has entry=true / partition=0 in its own DSL spec, OR
-  //   • it contains at least one entry node.
-  const entryGroupIds = new Set<string>()
-  for (const g of groups) {
-    if (g.entry === true || g.partition === 0) entryGroupIds.add(g.id)
-  }
-  for (const n of doc.nodes) {
-    if (entryIds.has(n.id) && n.group && groupIds.has(n.group)) {
-      entryGroupIds.add(n.group)
-    }
-  }
-  // Per-node explicit partition wins over auto-detected entry.
+  // Per-node explicit partition wins over auto-computed longest-path.
   const nodePartition = new Map<string, number>()
   for (const n of doc.nodes) {
     if (typeof n.partition === 'number') nodePartition.set(n.id, n.partition)
     else if (n.entry === true) nodePartition.set(n.id, 0)
   }
-  // Per-group explicit partition.
-  const groupPartition = new Map<string, number>()
-  for (const g of groups) {
-    if (typeof g.partition === 'number') groupPartition.set(g.id, g.partition)
-    else if (g.entry === true) groupPartition.set(g.id, 0)
+
+  // ─── Longest-path tier computation (WoT tech-tree look) ─────────────────
+  // Для каждой ноды/junction считаем самую длинную цепочку от entry-узла.
+  // Это число → `elk.partitioning.partition`, и ELK прижимает узел к
+  // соответствующей колонке-тиру.
+  const outAdj = new Map<string, string[]>()
+  for (const e of doc.edges) {
+    const [fh] = e.from.split('.')
+    const [th] = e.to.split('.')
+    if (!fh || !th) continue
+    if (!outAdj.has(fh)) outAdj.set(fh, [])
+    outAdj.get(fh)!.push(th)
   }
+  const tier = new Map<string, number>()
+  for (const id of entryIds) tier.set(id, nodePartition.get(id) ?? 0)
+  // Junctions без входов — тоже tier 0 (визуальные затычки)
+  for (const j of junctions) {
+    if (!incoming.has(j.id)) tier.set(j.id, 0)
+  }
+  // Explicit partitions per node/group выигрывают над auto-LP
+  for (const [id, p] of nodePartition) tier.set(id, p)
+  // DAG longest-path relaxation: повторяем пока что-то меняется (циклы
+  // ограничены счётчиком).
+  const allTierableIds = [
+    ...doc.nodes.map((n) => n.id),
+    ...junctions.map((j) => j.id),
+  ]
+  const MAX_RELAX = allTierableIds.length + 16
+  let changed = true
+  let relaxIter = 0
+  while (changed && relaxIter++ < MAX_RELAX) {
+    changed = false
+    for (const [from, tos] of outAdj) {
+      const fd = tier.get(from)
+      if (fd === undefined) continue
+      for (const to of tos) {
+        // Если у `to` есть жёсткий explicit partition — не трогаем.
+        if (nodePartition.has(to)) continue
+        const cur = tier.get(to)
+        const nd = fd + 1
+        if (cur === undefined || nd > cur) {
+          tier.set(to, nd)
+          changed = true
+        }
+      }
+    }
+  }
+  // Изолированные / cycle-only → tier 0
+  for (const id of allTierableIds) if (!tier.has(id)) tier.set(id, 0)
 
-  // ─── Build ELK hierarchy ─────────────────────────────────────────────────
-  // Each group becomes a compound node "__group__<id>"; its members
-  // (doc.nodes + junctions with that group) live inside as children.
-  // Ungrouped nodes go directly under the root.
-
-  const compoundChildren = new Map<string, ElkNode[]>()
-  for (const g of groups) compoundChildren.set(g.id, [])
+  // ─── Build ELK input: всё плоско, без compound-обёрток групп ─────────────
+  // Группы остаются метаданными (для цвета/фильтра), но НЕ создают
+  // ELK-компаундов — иначе колонки-тиры разваливаются.
   const freeChildren: ElkNode[] = []
-
   for (const n of doc.nodes) {
-    const child: ElkNode = {
+    freeChildren.push({
       id: n.id,
       width: NODE_WIDTH,
       height: estimateHeight(n, collapsedSet.has(n.id)),
-    }
-    // Pin entry nodes to the first layer of whatever container they end up in.
-    const layoutOpts: Record<string, string> = {}
-    const explicitPartition = nodePartition.get(n.id)
-    if (explicitPartition !== undefined) {
-      layoutOpts['elk.partitioning.partition'] = String(explicitPartition)
-      if (explicitPartition === 0) {
-        layoutOpts['elk.layered.layerConstraint'] = 'FIRST'
-      }
-    } else if (entryIds.has(n.id)) {
-      layoutOpts['elk.layered.layerConstraint'] = 'FIRST'
-    }
-    if (Object.keys(layoutOpts).length > 0) child.layoutOptions = layoutOpts
-    if (n.group && groupIds.has(n.group)) {
-      compoundChildren.get(n.group)!.push(child)
-    } else {
-      freeChildren.push(child)
-    }
+      layoutOptions: {
+        'elk.partitioning.partition': String(tier.get(n.id) ?? 0),
+      },
+    })
   }
   for (const j of junctions) {
-    const child: ElkNode = {
+    freeChildren.push({
       id: j.id,
       width: JUNCTION_SIZE,
       height: JUNCTION_SIZE,
-    }
-    if (j.group && groupIds.has(j.group)) {
-      compoundChildren.get(j.group)!.push(child)
-    } else {
-      freeChildren.push(child)
-    }
-  }
-
-  const compounds: ElkNode[] = []
-  const compoundIdOf = (gid: string) => `__group__${gid}`
-  const compoundOpts = opts.optimize ? COMPOUND_OPTIMIZE_OPTIONS : COMPOUND_OPTIONS
-  for (const g of groups) {
-    const children = compoundChildren.get(g.id) ?? []
-    if (children.length === 0) continue
-    // Жёстко через partitioning (а не через layerConstraint, который ELK
-    // может игнорировать на cross-group зависимостях).
-    //   • explicit partition выигрывает,
-    //   • entry/partition:0 flag → 0,
-    //   • эвристика (есть entry-узлы внутри) → 0.
-    const explicitPartition = groupPartition.get(g.id)
-    const partition =
-      explicitPartition !== undefined
-        ? explicitPartition
-        : entryGroupIds.has(g.id)
-          ? 0
-          : undefined
-
-    const compoundLayoutOptions: Record<string, string> = { ...compoundOpts }
-    if (partition !== undefined) {
-      compoundLayoutOptions['elk.partitioning.partition'] = String(partition)
-      if (partition === 0) {
-        compoundLayoutOptions['elk.layered.layerConstraint'] = 'FIRST'
-      }
-    }
-    compounds.push({
-      id: compoundIdOf(g.id),
-      layoutOptions: compoundLayoutOptions,
-      children,
+      layoutOptions: {
+        'elk.partitioning.partition': String(tier.get(j.id) ?? 0),
+      },
     })
   }
+  // В WoT-режиме компаундов нет — переменная оставлена для совместимости
+  // с edge-walk кодом ниже (он ожидает массив).
+  const compounds: ElkNode[] = []
 
   const elkEdges = doc.edges.map((e, i) => {
     const [fromHead] = e.from.split('.')
@@ -446,78 +371,18 @@ export async function toFlow(
   for (const c of layouted.children ?? []) walkEdges(c)
 
   // ─── Build vue-flow nodes ────────────────────────────────────────────────
+  // WoT-режим: всё плоско, групп-контейнеров в графе нет. Сами группы из
+  // doc.groups остаются метаданными (для цвета/фильтра), но в flowNodes
+  // не попадают — иначе колонки-тиры разваливаются.
   const flowNodes: Node[] = []
-
-  // groupId → finally-rendered position on canvas (user-x/y override wins
-  // over ELK's compound origin). Used below to convert a child's absolute
-  // ELK coordinate into a position RELATIVE to its parent group — which is
-  // what vue-flow's parentNode feature expects.
-  const groupFinalPos = new Map<string, { x: number; y: number }>()
-
-  // groups first (lowest z-index) — sized by ELK's compound dimensions.
-  // The header (.group-node__header) is the drag handle; dragging it via
-  // vue-flow's native handling moves the group AND every child whose
-  // parentNode is this group.
-  for (const g of groups) {
-    const cp = absPos.get(compoundIdOf(g.id))
-    if (!cp) continue
-    // Positions/sizes are owned by ELK on every layout pass — user x/y/width/
-    // height overrides intentionally ignored. Pinning groups by hand fought
-    // the auto-layout (produced overlap + chaotic edge routing on dense
-    // graphs), so we drop them. The fields stay in the schema for now to
-    // avoid breaking existing YAML files but have no effect.
-    const x = cp.x
-    const y = cp.y
-    const w = cp.w
-    const h = cp.h
-    groupFinalPos.set(g.id, { x, y })
-    flowNodes.push({
-      id: g.id,
-      type: 'group-container',
-      position: { x, y },
-      data: { ...g, headerHeight: GROUP_HEADER },
-      style: { width: `${w}px`, height: `${h}px`, zIndex: 0 },
-      selectable: false,
-      // draggable:false — иначе vue-flow ставит inline pointer-events:auto
-      // на wrapper, и канвас перестаёт паниться, когда курсор над телом
-      // группы. Свой drag реализован прямо в GroupNode.vue через pointer-
-      // events на header + updateNode (см. onHeaderPointerDown там).
-      draggable: false,
-      focusable: false,
-    })
-  }
-
-  // Helper: convert an absolute ELK position to vue-flow's expected form.
-  // If the node belongs to a group → make position relative to the group's
-  // ELK origin (NOT user origin — vue-flow handles that internally because
-  // we set parentNode); also attach parentNode so dragging the group moves
-  // children with it.
-  function withParent(
-    id: string,
-    absX: number,
-    absY: number,
-    groupId: string | undefined,
-  ): { position: { x: number; y: number }; parentNode?: string } {
-    if (!groupId || !groupIds.has(groupId)) {
-      return { position: { x: absX, y: absY } }
-    }
-    const cp = absPos.get(compoundIdOf(groupId))
-    if (!cp) return { position: { x: absX, y: absY } }
-    return {
-      position: { x: absX - cp.x, y: absY - cp.y },
-      parentNode: groupId,
-    }
-  }
 
   for (const n of doc.nodes) {
     const pos = absPos.get(n.id)
     if (!pos) continue
-    const wp = withParent(n.id, pos.x, pos.y, n.group)
     flowNodes.push({
       id: n.id,
       type: 'obstruction',
-      position: wp.position,
-      parentNode: wp.parentNode,
+      position: { x: pos.x, y: pos.y },
       data: n,
       style: { width: `${NODE_WIDTH}px` },
     })
@@ -526,12 +391,10 @@ export async function toFlow(
   for (const j of junctions) {
     const pos = absPos.get(j.id)
     if (!pos) continue
-    const wp = withParent(j.id, pos.x, pos.y, j.group)
     flowNodes.push({
       id: j.id,
       type: 'junction',
-      position: wp.position,
-      parentNode: wp.parentNode,
+      position: { x: pos.x, y: pos.y },
       data: j,
       style: { width: `${JUNCTION_SIZE}px`, height: `${JUNCTION_SIZE}px` },
     })
