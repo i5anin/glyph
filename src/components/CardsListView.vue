@@ -217,7 +217,7 @@ function onChevronClick(n: NodeSpec, ev: MouseEvent) {
             class="cards-list__card"
             :class="{
               'cards-list__card--collapsed': isCardCollapsed(n),
-              'cards-list__card--selected': selectedNodeId?.value === n.id,
+              'cards-list__card--selected': selectedNodeId === n.id,
             }"
             :style="{ '--cc': colorVar[nodeColor(n)] }"
             :title="`Перейти к ${n.title} в графе`"

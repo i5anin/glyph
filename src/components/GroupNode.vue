@@ -169,12 +169,8 @@ function onResizeStart(ev: PointerEvent, dir: Dir) {
     handle.removeEventListener('pointercancel', onUp)
     if (raf != null) cancelAnimationFrame(raf)
     resizing.value = false
-    groupPatch(props.id, {
-      x: Math.round(curX),
-      y: Math.round(curY),
-      width: Math.round(curW),
-      height: Math.round(curH),
-    })
+    // Resize is purely visual now — ELK owns group dimensions on every layout
+    // pass. We intentionally do NOT write x/y/width/height back to the DSL.
   }
 
   handle.addEventListener('pointermove', onMove)
@@ -232,11 +228,8 @@ function onHeaderPointerDown(ev: PointerEvent) {
     const dy = (lastEv.clientY - startMouseY) / zoom
     curX = startX + dx
     curY = startY + dy
-    const n = findNode(props.id)
-    const existingStyle = (n?.style as Record<string, unknown> | undefined) ?? {}
     updateNode(props.id, {
       position: { x: curX, y: curY },
-      style: existingStyle,
     })
   }
 
@@ -257,9 +250,9 @@ function onHeaderPointerDown(ev: PointerEvent) {
     handle.removeEventListener('pointercancel', onUp)
     if (raf != null) cancelAnimationFrame(raf)
     dragging.value = false
-    if (moved) {
-      groupPatch(props.id, { x: Math.round(curX), y: Math.round(curY) })
-    }
+    // Group drag is purely visual now — ELK reclaims positions on the next
+    // layout pass. We intentionally do NOT write x/y back to the DSL.
+    void moved
   }
 
   handle.addEventListener('pointermove', onMove)
@@ -286,9 +279,8 @@ function onHeaderPointerDown(ev: PointerEvent) {
       class="group-node__header"
       :title="editing
         ? 'Двойной клик — выйти из правки рамки'
-        : 'Тяни — переместить группу с детьми. Двойной клик — режим resize.'"
+        : 'Двойной клик — режим resize. Перетаскивание отключено: ELK сам раскладывает группы.'"
       @dblclick="onHeaderDblClick"
-      @pointerdown="onHeaderPointerDown"
     >
       <Folder :size="13" :stroke-width="2" class="group-node__icon" />
       <span class="group-node__title">{{ title }}</span>

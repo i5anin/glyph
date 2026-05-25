@@ -104,7 +104,7 @@ function onCascadeClick() {
 // because someone called "collapse all" / cascaded into us), tell vue-flow
 // to re-measure dimensions and re-route the edges.
 watch(collapsed, () => {
-  nextTick(() => updateNodeInternals(props.id))
+  nextTick(() => updateNodeInternals([props.id]))
 })
 
 const visibleRows = computed(() => {

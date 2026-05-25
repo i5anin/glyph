@@ -85,15 +85,12 @@ const {
   nodes: vfNodes,
 } = useVueFlow()
 
-// When a group-container finishes dragging — persist its new x/y back into
-// the doc via groupPatch, so the next ELK pass keeps the user-chosen spot
-// (and children stay with it because they're parented to this group).
+// Group drag is purely visual now — we no longer persist x/y back into the
+// doc. The next ELK pass owns positions; pinning groups by hand fought the
+// auto-layout and produced overlap/route hell on dense graphs.
+// (kept the handler stub in case we re-introduce snapshots later.)
 onNodeDragStop(({ node }) => {
-  if (node.type !== 'group-container') return
-  emit('group-patch', node.id, {
-    x: Math.round(node.position?.x ?? 0),
-    y: Math.round(node.position?.y ?? 0),
-  })
+  void node
 })
 
 // User-initiated full-graph rebuilds: relayout / optimize.
@@ -157,7 +154,7 @@ const rootEl = ref<HTMLDivElement | null>(null)
 function refreshAll() {
   const arr = vfNodes.value
   if (!arr || !arr.length) return
-  arr.forEach((n) => updateNodeInternals(n.id))
+  updateNodeInternals(arr.map((n) => n.id))
 }
 
 function runFit() {
@@ -295,7 +292,7 @@ onEdgesChange((changes) => {
       :min-zoom="0.05"
       :max-zoom="2"
       :default-viewport="{ x: 0, y: 0, zoom: 0.8 }"
-      :nodes-draggable="true"
+      :nodes-draggable="false"
       :nodes-connectable="true"
       :edges-updatable="true"
       :delete-key-code="['Delete', 'Backspace']"

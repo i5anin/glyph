@@ -5,8 +5,7 @@
     "vite.config.*",
     "vitest.config.*",
     "cypress.config.*",
-    "playwright.config.*",
-    "eslint.config.*"
+    "playwright.config.*"
   ],
   "compilerOptions": {
     // Most tools use transpilation instead of Node.js's native type-stripping.
@@ -17,8 +16,13 @@
     // Include Node.js types and avoid accidentally including other `@types/*` packages.
     "types": ["node"],
 
-    // Disable emitting output during `vue-tsc --build`, which is used for type-checking only.
-    "noEmit": true,
+    // Required for project references (TS6306).
+    "composite": true,
+    // TS6310 forbids `noEmit: true` in referenced composite projects. We don't
+    // actually need the JS output — emit only declarations into a tmp dir so
+    // it doesn't pollute the working tree.
+    "emitDeclarationOnly": true,
+    "outDir": "./node_modules/.tmp/tsc-node-out",
 
     // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
     // Specified here to keep it out of the root directory.
