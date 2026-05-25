@@ -5,6 +5,7 @@ import type { Connection, Edge, Node } from '@vue-flow/core'
 import { ChevronLeft, PanelLeft } from 'lucide-vue-next'
 import { parseDsl, DslError } from './dsl/parse'
 import { toFlow } from './dsl/toFlow'
+import { autoClusterByReachability } from './dsl/autoCluster'
 import { toDsl, edgeSpecFromConnection, endpointRefFromHandle } from './dsl/fromFlow'
 import type { NodeSpec, ObstructionDoc } from './dsl/schema'
 import {
@@ -19,7 +20,7 @@ import DslEditor from './components/DslEditor.vue'
 import GraphPicker from './components/GraphPicker.vue'
 import CardsListView from './components/CardsListView.vue'
 
-// ─── Left-panel display mode (persisted) ─────────────────────────────────
+// ─── TODO: Left-panel display mode (persisted) ─────────────────────────────────
 type LeftMode = 'yaml' | 'cards'
 const LEFT_MODE_KEY = 'glyph:left-mode'
 const leftMode = ref<LeftMode>(
@@ -147,7 +148,12 @@ async function applyFromDsl(text: string) {
       collapsedNodes.value = new Set(doc.nodes.map((n) => n.id))
       collapseAllOnNextApply = false
     }
-    const flow = await toFlow(doc, collapsedNodes.value)
+    // Auto-cluster the doc by reachability: entries → leftmost column, all
+    // nodes they reach exclusively go into the entry's group, multi-used
+    // helpers go into "_shared". The original `doc` in currentDoc stays
+    // untouched — only render uses the clustered view.
+    const clustered = autoClusterByReachability(doc)
+    const flow = await toFlow(clustered, collapsedNodes.value)
     nodes.value = flow.nodes
     edges.value = flow.edges
     error.value = null
@@ -159,7 +165,8 @@ async function applyFromDsl(text: string) {
 
 async function applyFromDoc(next: ObstructionDoc) {
   currentDoc.value = next
-  const flow = await toFlow(next, collapsedNodes.value)
+  const clustered = autoClusterByReachability(next)
+  const flow = await toFlow(clustered, collapsedNodes.value)
   nodes.value = flow.nodes
   edges.value = flow.edges
   syncingFromGraph = true
@@ -312,7 +319,8 @@ function relayout() {
 async function optimizePaths() {
   const next = { ...currentDoc.value }
   currentDoc.value = next
-  const flow = await toFlow(next, collapsedNodes.value, { optimize: true })
+  const clustered = autoClusterByReachability(next)
+  const flow = await toFlow(clustered, collapsedNodes.value, { optimize: true })
   nodes.value = flow.nodes
   edges.value = flow.edges
   syncingFromGraph = true
@@ -396,13 +404,22 @@ function onRowPatch(
   void applyFromDoc({ ...currentDoc.value, nodes: nextNodes })
 }
 
-// Resize / rename / recolor a group frame.
+// Rename / recolor / re-icon a group frame.
+// Coordinate / size fields (x, y, width, height) are intentionally stripped:
+// ELK owns positions on every layout pass, and pinning groups by hand fought
+// the auto-layout (overlap + chaotic routing on dense graphs).
 function onGroupPatch(groupId: string, patch: Record<string, unknown>) {
   const groups = currentDoc.value.groups ?? []
   const idx = groups.findIndex((g) => g.id === groupId)
   if (idx === -1) return
+  const { x: _x, y: _y, width: _w, height: _h, ...meaningful } = patch
+  void _x
+  void _y
+  void _w
+  void _h
+  if (Object.keys(meaningful).length === 0) return
   const next = [...groups]
-  next[idx] = { ...next[idx]!, ...patch }
+  next[idx] = { ...next[idx]!, ...meaningful }
   void applyFromDoc({ ...currentDoc.value, groups: next })
 }
 
