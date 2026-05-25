@@ -62,6 +62,10 @@ const elk = new ELK()
 const ROOT_OPTIONS: Record<string, string> = {
   'elk.algorithm': 'layered',
   'elk.direction': 'RIGHT',
+  // ORTHOGONAL — строго 90°, классический WoT-tech-tree.
+  // Раньше казалось что POLYLINE спасёт от плотности — но диагонали
+  // ломают tier-look. Лучше широкие колонки + ELK-bend-points (см. фикс
+  // в FlowEdge.vue: bendsAreFresh теперь true даже на свёрнутых нодах).
   'elk.edgeRouting': 'ORTHOGONAL',
 
   // Жёсткие тиры. Партиция выставляется per-node ниже (longest-path).

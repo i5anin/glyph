@@ -53,10 +53,10 @@ const isLinked = computed(() => isOnHover.value === true)
 const bendsAreFresh = computed(() => {
   const bends = props.data?.bends
   if (!bends || bends.length === 0) return false
-  // If either endpoint is currently collapsed, its handle has moved relative
-  // to where ELK computed the bends → polyline would kink ugly.
-  if (collapsedSet?.value?.has(props.source)) return false
-  if (collapsedSet?.value?.has(props.target)) return false
+  // ELK уже знает collapsed-высоты (toFlow.estimateHeight). Раньше тут
+  // дополнительно отбрасывали bends при свёрнутых концах, но т.к.
+  // по дефолту свёрнуто ВСЁ — это полностью обнуляло ELK routing и
+  // вместо WoT-tree рендерился smoothstep на все 250 рёбер. Доверяем ELK.
   return true
 })
 
