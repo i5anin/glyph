@@ -89,14 +89,13 @@ function validateGroup(g: unknown, i: number): GroupSpec {
   if (!g || typeof g !== 'object') throw new DslError(`groups[${i}] must be an object`)
   const obj = g as Record<string, unknown>
   if (typeof obj.id !== 'string') throw new DslError(`groups[${i}].id must be a string`)
+  // Position / size fields (x, y, width, height) are intentionally NOT read.
   return {
     id: obj.id,
     title: typeof obj.title === 'string' ? obj.title : undefined,
     color: obj.color as GroupSpec['color'],
-    width: typeof obj.width === 'number' && obj.width > 0 ? obj.width : undefined,
-    height: typeof obj.height === 'number' && obj.height > 0 ? obj.height : undefined,
-    x: typeof obj.x === 'number' ? obj.x : undefined,
-    y: typeof obj.y === 'number' ? obj.y : undefined,
+    entry: obj.entry === true ? true : undefined,
+    partition: typeof obj.partition === 'number' ? obj.partition : undefined,
   }
 }
 
@@ -124,6 +123,8 @@ function validateNode(n: unknown, i: number): NodeSpec {
     progress: obj.progress as NodeSpec['progress'],
     footer: obj.footer as NodeSpec['footer'],
     group: typeof obj.group === 'string' ? obj.group : undefined,
+    entry: obj.entry === true ? true : undefined,
+    partition: typeof obj.partition === 'number' ? obj.partition : undefined,
   }
 }
 

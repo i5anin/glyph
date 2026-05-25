@@ -9,7 +9,18 @@ import type { EdgeSpec, ObstructionDoc } from './schema'
 export function toDsl(doc: ObstructionDoc): string {
   // build a clean object preserving key order
   const out: Record<string, unknown> = {}
-  if (doc.groups && doc.groups.length) out.groups = doc.groups
+  if (doc.groups && doc.groups.length) {
+    // Strip legacy x/y/width/height — positions are owned by ELK on each
+    // layout pass, those fields no longer participate in rendering.
+    out.groups = doc.groups.map((g) => {
+      const { x: _x, y: _y, width: _w, height: _h, ...rest } = g
+      void _x
+      void _y
+      void _w
+      void _h
+      return rest
+    })
+  }
   if (doc.junctions && doc.junctions.length) out.junctions = doc.junctions
   out.nodes = doc.nodes
   out.edges = doc.edges

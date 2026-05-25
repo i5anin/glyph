@@ -32,6 +32,10 @@ export interface NodeSpec {
   progress?: ProgressSpec
   footer?: FooterSpec
   group?: string
+  /** Mark this node as a tree root (pinned to the leftmost ELK partition). */
+  entry?: boolean
+  /** Optional explicit ELK partition (column). 0 = leftmost. */
+  partition?: number
 }
 
 export type EdgeShape = 'smoothstep' | 'step' | 'bezier' | 'straight'
@@ -54,10 +58,12 @@ export interface GroupSpec {
   id: string
   title?: string
   color?: AccentColor
-  // Optional manual size and position overrides. If absent, the group is
-  // auto-laid-out to fit its members (bounding box + padding). When set,
-  // the override wins. The user enters "edit" mode (double-click the header)
-  // to drag the borders from any side.
+  /** Pin this group to a specific ELK partition (column). 0 = leftmost. */
+  partition?: number
+  /** Force this group into the leftmost partition (alias for partition: 0). */
+  entry?: boolean
+  // Deprecated coordinate fields — kept in the type for backward-compat
+  // but no longer read by parse.ts and ignored by toFlow.
   width?: number
   height?: number
   x?: number
