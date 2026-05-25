@@ -398,6 +398,9 @@ function onChevronClick(n: NodeSpec, ev: MouseEvent) {
 
 /* ── Card ─────────────────────────────────────────────────── */
 .cards-list__card {
+  /* Fallback на случай если inline :style="{ '--cc': … }" из шаблона
+     не сработает — карточка всё равно отрисуется с дефолтным цветом. */
+  --cc: var(--accent-cyan);
   margin: 2px 10px;
   padding: 5px 8px;
   background: var(--node-bg-elev);
