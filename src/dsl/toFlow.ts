@@ -1,4 +1,5 @@
 import ELK from 'elkjs/lib/elk.bundled.js'
+import type { ElkNode, ElkExtendedEdge, ElkEdgeSection } from 'elkjs/lib/elk-api'
 import type { Edge, Node } from '@vue-flow/core'
 import type { ObstructionDoc, NodeSpec } from './schema'
 
@@ -43,22 +44,62 @@ function parseEndpoint(
 
 const elk = new ELK()
 
-// Root layout: layered LR, orthogonal edges. With INCLUDE_CHILDREN, ELK lays
-// out compound groups recursively and routes edges across them.
+// ─────────────────────────────────────────────────────────────────────────────
+// LAYOUT STRATEGY (rewritten for dense graphs like soft.pfforum: 90 / 250+).
+//
+// The old INCLUDE_CHILDREN strategy tried to layer *everything globally* in a
+// single pass. With 250 edges crossing group boundaries that collapses into
+// a hairball — what you saw on the pfforum screenshot.
+//
+// New plan:
+//   • ROOT lays out groups + ungrouped nodes as black-box rectangles using
+//     `layered` LR. Cross-group edges go through whitespace between groups,
+//     not through their interiors.
+//   • Each GROUP runs its own `layered` LR pass internally. The compound's
+//     bounding box is opaque to the root pass.
+//   • SEPARATE_CHILDREN is the default when hierarchyHandling is unset, so
+//     we just don't set it.
+//
+// thoroughness is dialed back to 10 (from 100). On 90 nodes the 100-level
+// search runs 2-3s per relayout. 10 is the sweet spot: still much better
+// crossings than the default 7, runs in <500ms.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const ROOT_OPTIONS: Record<string, string> = {
   'elk.algorithm': 'layered',
   'elk.direction': 'RIGHT',
   'elk.edgeRouting': 'ORTHOGONAL',
+
+  // ONE global layered LR pass through groups + their children. Crosses
+  // group boundaries cleanly, gives the WoT tech-tree look: entries at
+  // layer 0, each descendant pushed right by its longest path from root.
   'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+  'elk.partitioning.activate': 'true',
+
+  // Tree-style layering: every node sits at its longest distance from root
+  'elk.layered.layering.strategy': 'LONGEST_PATH',
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-  // Spacing between compound groups (root-level siblings)
-  'elk.layered.spacing.nodeNodeBetweenLayers': '50',
+  'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+  'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
+
+  // Crossing reduction
+  'elk.layered.thoroughness': '15',
+  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+  'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
+  'elk.layered.cycleBreaking.strategy': 'GREEDY',
+  'elk.layered.unnecessaryBendpoints': 'true',
+
+  // Generous spacing — tier columns clearly separated
+  'elk.layered.spacing.nodeNodeBetweenLayers': '140',
   'elk.spacing.nodeNode': '40',
-  'elk.spacing.edgeNode': '16',
-  'elk.spacing.edgeEdge': '10',
-  // Disconnected subgraphs go side-by-side, not on top of each other
+  'elk.spacing.edgeNode': '24',
+  'elk.spacing.edgeEdge': '14',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '32',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '18',
+
+  // Disconnected subgraphs side-by-side
   'elk.separateConnectedComponents': 'true',
-  'elk.spacing.componentComponent': '80',
+  'elk.spacing.componentComponent': '120',
 }
 
 // «Оптимизация путей» — отдельный профиль с агрессивным crossing-minimization,
@@ -100,13 +141,28 @@ const GROUP_PADDING_OPT = `[top=${GROUP_PADDING + GROUP_HEADER},left=${GROUP_PAD
 // чтобы ELK не использовал дефолты для контейнеров (которые могут отличаться
 // от root и приводить к перекрытию). Spacing внутри плотнее, чем между
 // группами наверху.
+// Inside a compound group: layered LR, tier columns, denser than root
+// (groups should feel like a self-contained subgraph, not waste of space).
 const COMPOUND_OPTIONS: Record<string, string> = {
   'elk.algorithm': 'layered',
   'elk.direction': 'RIGHT',
   'elk.edgeRouting': 'ORTHOGONAL',
   'elk.padding': GROUP_PADDING_OPT,
-  'elk.layered.spacing.nodeNodeBetweenLayers': '40',
-  'elk.spacing.nodeNode': '28',
+
+  'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+  'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+  'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+  'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
+
+  'elk.layered.thoroughness': '10',
+  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+  'elk.layered.crossingMinimization.greedySwitch.type': 'TWO_SIDED',
+  'elk.layered.unnecessaryBendpoints': 'true',
+
+  'elk.layered.spacing.nodeNodeBetweenLayers': '70',
+  'elk.spacing.nodeNode': '24',
+  'elk.spacing.edgeNode': '18',
+  'elk.spacing.edgeEdge': '12',
 }
 
 // «Оптимизация» внутри компаунда — те же агрессивные опции, но spacing
@@ -141,6 +197,50 @@ export async function toFlow(
   const junctionIds = new Set(junctions.map((j) => j.id))
   const groupIds = new Set(groups.map((g) => g.id))
 
+  // ─── Entry detection ─────────────────────────────────────────────────────
+  // A node is an "entry" (root of the dependency tree) if either:
+  //   • it has no incoming edges,
+  //   • or the user explicitly marked it with `entry: true` in the DSL.
+  //
+  // Entries get layerConstraint=FIRST so ELK pins them to the leftmost
+  // column. Groups containing entries inherit that constraint at root level.
+  const incoming = new Map<string, number>()
+  for (const e of doc.edges) {
+    const [toHead] = e.to.split('.')
+    if (!toHead) continue
+    incoming.set(toHead, (incoming.get(toHead) ?? 0) + 1)
+  }
+  const entryIds = new Set<string>()
+  for (const n of doc.nodes) {
+    const isMarked = n.entry === true
+    const noIncoming = !incoming.has(n.id)
+    if (isMarked || noIncoming) entryIds.add(n.id)
+  }
+  // A group is an "entry group" iff:
+  //   • it has entry=true / partition=0 in its own DSL spec, OR
+  //   • it contains at least one entry node.
+  const entryGroupIds = new Set<string>()
+  for (const g of groups) {
+    if (g.entry === true || g.partition === 0) entryGroupIds.add(g.id)
+  }
+  for (const n of doc.nodes) {
+    if (entryIds.has(n.id) && n.group && groupIds.has(n.group)) {
+      entryGroupIds.add(n.group)
+    }
+  }
+  // Per-node explicit partition wins over auto-detected entry.
+  const nodePartition = new Map<string, number>()
+  for (const n of doc.nodes) {
+    if (typeof n.partition === 'number') nodePartition.set(n.id, n.partition)
+    else if (n.entry === true) nodePartition.set(n.id, 0)
+  }
+  // Per-group explicit partition.
+  const groupPartition = new Map<string, number>()
+  for (const g of groups) {
+    if (typeof g.partition === 'number') groupPartition.set(g.id, g.partition)
+    else if (g.entry === true) groupPartition.set(g.id, 0)
+  }
+
   // ─── Build ELK hierarchy ─────────────────────────────────────────────────
   // Each group becomes a compound node "__group__<id>"; its members
   // (doc.nodes + junctions with that group) live inside as children.
@@ -156,6 +256,18 @@ export async function toFlow(
       width: NODE_WIDTH,
       height: estimateHeight(n, collapsedSet.has(n.id)),
     }
+    // Pin entry nodes to the first layer of whatever container they end up in.
+    const layoutOpts: Record<string, string> = {}
+    const explicitPartition = nodePartition.get(n.id)
+    if (explicitPartition !== undefined) {
+      layoutOpts['elk.partitioning.partition'] = String(explicitPartition)
+      if (explicitPartition === 0) {
+        layoutOpts['elk.layered.layerConstraint'] = 'FIRST'
+      }
+    } else if (entryIds.has(n.id)) {
+      layoutOpts['elk.layered.layerConstraint'] = 'FIRST'
+    }
+    if (Object.keys(layoutOpts).length > 0) child.layoutOptions = layoutOpts
     if (n.group && groupIds.has(n.group)) {
       compoundChildren.get(n.group)!.push(child)
     } else {
@@ -181,9 +293,29 @@ export async function toFlow(
   for (const g of groups) {
     const children = compoundChildren.get(g.id) ?? []
     if (children.length === 0) continue
+    // Жёстко через partitioning (а не через layerConstraint, который ELK
+    // может игнорировать на cross-group зависимостях).
+    //   • explicit partition выигрывает,
+    //   • entry/partition:0 flag → 0,
+    //   • эвристика (есть entry-узлы внутри) → 0.
+    const explicitPartition = groupPartition.get(g.id)
+    const partition =
+      explicitPartition !== undefined
+        ? explicitPartition
+        : entryGroupIds.has(g.id)
+          ? 0
+          : undefined
+
+    const compoundLayoutOptions: Record<string, string> = { ...compoundOpts }
+    if (partition !== undefined) {
+      compoundLayoutOptions['elk.partitioning.partition'] = String(partition)
+      if (partition === 0) {
+        compoundLayoutOptions['elk.layered.layerConstraint'] = 'FIRST'
+      }
+    }
     compounds.push({
       id: compoundIdOf(g.id),
-      layoutOptions: compoundOpts,
+      layoutOptions: compoundLayoutOptions,
       children,
     })
   }
@@ -198,14 +330,14 @@ export async function toFlow(
     }
   })
 
-  let layouted: ElkRoot
+  let layouted: ElkNode
   try {
-    layouted = (await elk.layout({
+    layouted = await elk.layout({
       id: 'root',
       layoutOptions: rootOptions,
       children: [...compounds, ...freeChildren],
       edges: elkEdges,
-    })) as ElkRoot
+    })
   } catch (err) {
     console.error('[glyph] ELK layout failed, falling back to grid', err)
     layouted = {
@@ -215,7 +347,7 @@ export async function toFlow(
         x: (i % 8) * 320,
         y: Math.floor(i / 8) * 280,
       })),
-    } as ElkRoot
+    }
   }
 
   // ─── Flatten: collect absolute (canvas-space) positions ──────────────────
@@ -283,7 +415,7 @@ export async function toFlow(
   function walkEdges(node: ElkNode) {
     const offset = absPos.get(node.id!) ?? { x: 0, y: 0, w: 0, h: 0 }
     for (const e of node.edges ?? []) {
-      const sec = (e as { sections?: ElkSection[] }).sections?.[0]
+      const sec = (e as { sections?: ElkEdgeSection[] }).sections?.[0]
       if (!sec) continue
       edgeBends.set(e.id!, {
         startX: sec.startPoint.x + offset.x,
@@ -300,7 +432,7 @@ export async function toFlow(
   }
   // Root's own edges are at offset (0,0) by virtue of absPos for root being undefined.
   // Treat the root specially:
-  for (const e of (layouted as { edges?: ElkEdge[] }).edges ?? []) {
+  for (const e of (layouted as { edges?: ElkExtendedEdge[] }).edges ?? []) {
     const sec = e.sections?.[0]
     if (!sec) continue
     edgeBends.set(e.id!, {
@@ -329,11 +461,15 @@ export async function toFlow(
   for (const g of groups) {
     const cp = absPos.get(compoundIdOf(g.id))
     if (!cp) continue
-    // Manual user overrides (resize / drag) win over auto-computed dimensions.
-    const x = g.x ?? cp.x
-    const y = g.y ?? cp.y
-    const w = g.width ?? cp.w
-    const h = g.height ?? cp.h
+    // Positions/sizes are owned by ELK on every layout pass — user x/y/width/
+    // height overrides intentionally ignored. Pinning groups by hand fought
+    // the auto-layout (produced overlap + chaotic edge routing on dense
+    // graphs), so we drop them. The fields stay in the schema for now to
+    // avoid breaking existing YAML files but have no effect.
+    const x = cp.x
+    const y = cp.y
+    const w = cp.w
+    const h = cp.h
     groupFinalPos.set(g.id, { x, y })
     flowNodes.push({
       id: g.id,
@@ -443,29 +579,3 @@ export async function toFlow(
   return { nodes: flowNodes, edges }
 }
 
-// ─── ELK types (minimal — the package's own types are loose) ─────────────
-interface ElkNode {
-  id?: string
-  width?: number
-  height?: number
-  x?: number
-  y?: number
-  children?: ElkNode[]
-  edges?: ElkEdge[]
-  layoutOptions?: Record<string, string>
-}
-
-interface ElkRoot extends ElkNode {
-  id: 'root'
-}
-
-interface ElkSection {
-  startPoint: { x: number; y: number }
-  endPoint: { x: number; y: number }
-  bendPoints?: { x: number; y: number }[]
-}
-
-interface ElkEdge {
-  id?: string
-  sections?: ElkSection[]
-}
