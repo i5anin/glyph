@@ -1,0 +1,1233 @@
+{
+  "schemaVersion": 1,
+  "snapshot": "2026-10-30T14:47:11.360Z",
+  "project": "glyph",
+  "root": ".",
+  "method": "static-local-index",
+  "limitations": [
+    "Нет динамических вызовов и сетевых интеграций",
+    "Сверять sha256 и evidence.line с текущими исходниками",
+    "Наличие зависимости не доказывает работоспособность"
+  ],
+  "nodes": [
+    {
+      "id": "project:glyph",
+      "type": "project",
+      "name": "glyph"
+    },
+    {
+      "id": "project:glyph/file:README.md",
+      "type": "file",
+      "path": "README.md",
+      "sha256": "6a7e102500b298c5595ace6bf2ed8f44bc1a08f7f6fb522d1fc8ae38b380c847",
+      "bytes": 2301
+    },
+    {
+      "id": "project:glyph/file:env.d.ts",
+      "type": "file",
+      "path": "env.d.ts",
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+      "bytes": 38
+    },
+    {
+      "id": "project:glyph/file:eslint.config.ts",
+      "type": "file",
+      "path": "eslint.config.ts",
+      "sha256": "b213544ea9438fcaf37a851052296496d591eb69c6956772feaf656c3c6d307e",
+      "bytes": 1055
+    },
+    {
+      "id": "project:glyph/file:package.json",
+      "type": "file",
+      "path": "package.json",
+      "sha256": "85d08d7aaac9fdc1776186ac1492dd16911179efe8619900679daca3fadb5808",
+      "bytes": 1448
+    },
+    {
+      "id": "project:glyph/file:qodana.yaml",
+      "type": "file",
+      "path": "qodana.yaml"
+    },
+    {
+      "id": "project:glyph/file:src/App.vue",
+      "type": "file",
+      "path": "src/App.vue",
+      "sha256": "b3ceb7b16ab1af730a83e64eae252995e8120c59ec8e55397f641e0b335b56f4",
+      "bytes": 26180
+    },
+    {
+      "id": "project:glyph/file:src/components/CardsListView.vue",
+      "type": "file",
+      "path": "src/components/CardsListView.vue",
+      "sha256": "a74543c83a79abc8b0a272a6573a7610ca90a56ec5286bca480d67827e19341c",
+      "bytes": 14364
+    },
+    {
+      "id": "project:glyph/file:src/components/DslEditor.vue",
+      "type": "file",
+      "path": "src/components/DslEditor.vue",
+      "sha256": "7bd4bbe6e3b89c02660738d9e239657a461c06e6730c853240652a50f2e8cd79",
+      "bytes": 3919
+    },
+    {
+      "id": "project:glyph/file:src/components/FlowEdge.vue",
+      "type": "file",
+      "path": "src/components/FlowEdge.vue",
+      "sha256": "0a0e64fb6702acb1a7e68fd6999519cb4d2cfcd2b464413fc809e8322dbf7394",
+      "bytes": 11134
+    },
+    {
+      "id": "project:glyph/file:src/components/GraphCanvas.vue",
+      "type": "file",
+      "path": "src/components/GraphCanvas.vue",
+      "sha256": "a3383f774d19fb4a1444114fa6a119fe2a2b20c49fd383f2ef5e9f5b543c313a",
+      "bytes": 10554
+    },
+    {
+      "id": "project:glyph/file:src/components/GraphPicker.vue",
+      "type": "file",
+      "path": "src/components/GraphPicker.vue",
+      "sha256": "9a46d8ea99d5911ed918839633bb94519e024bd986bbb3e0699724ee66106110",
+      "bytes": 9660
+    },
+    {
+      "id": "project:glyph/file:src/components/GroupNode.vue",
+      "type": "file",
+      "path": "src/components/GroupNode.vue",
+      "sha256": "2248db0682f99827083576c04d5e75b3b448e99c7f4ab85591d3e3555269ccee",
+      "bytes": 16082
+    },
+    {
+      "id": "project:glyph/file:src/components/JunctionNode.vue",
+      "type": "file",
+      "path": "src/components/JunctionNode.vue",
+      "sha256": "6492f416ca7805ea333d791206d6e5b73b4c894b42be2b721b41f642c287445a",
+      "bytes": 2019
+    },
+    {
+      "id": "project:glyph/file:src/components/ObstructionNode.vue",
+      "type": "file",
+      "path": "src/components/ObstructionNode.vue",
+      "sha256": "02daefd49d627a21c2e407d94953a5efb5291898436bc2f88534c06d6857a389",
+      "bytes": 23716
+    },
+    {
+      "id": "project:glyph/file:src/components/PerfOverlay.vue",
+      "type": "file",
+      "path": "src/components/PerfOverlay.vue",
+      "sha256": "c9bafa6300472ae729fe0b51e8e03920d63e07d8ae72e25b62086aa29a25fa74",
+      "bytes": 5883
+    },
+    {
+      "id": "project:glyph/file:src/components/Toolbar.vue",
+      "type": "file",
+      "path": "src/components/Toolbar.vue",
+      "sha256": "a80668542c24eca668d4bde98bd2d7b6f5138800e8cf068ae0606ee0c8c9bfd4",
+      "bytes": 2455
+    },
+    {
+      "id": "project:glyph/file:src/demo/pfForumDemo.ts",
+      "type": "file",
+      "path": "src/demo/pfForumDemo.ts",
+      "sha256": "cb4d316aac83c324eb28c6ce1da88d95c1bb53a775ef5c7cd8b53dc1f366831d",
+      "bytes": 63455
+    },
+    {
+      "id": "project:glyph/file:src/demo/softPfforumDemo.ts",
+      "type": "file",
+      "path": "src/demo/softPfforumDemo.ts",
+      "sha256": "5a22b4ed876f47f89a9fe075af9c7b41aec806fc2f41eb5645a0fb09811a4e8a",
+      "bytes": 89759
+    },
+    {
+      "id": "project:glyph/file:src/demo/vueAppDemo.ts",
+      "type": "file",
+      "path": "src/demo/vueAppDemo.ts",
+      "sha256": "20dab4e2109c4a17692e1d20cd6eb16504e5a531f1a649d5711fd6219be531e1",
+      "bytes": 2613
+    },
+    {
+      "id": "project:glyph/file:src/dsl/autoCluster.ts",
+      "type": "file",
+      "path": "src/dsl/autoCluster.ts",
+      "sha256": "9680db3419e40880e30a420f576af5a6f9a9ef828d3c277d94b5ba48e302f5f1",
+      "bytes": 8201
+    },
+    {
+      "id": "project:glyph/file:src/dsl/fromFlow.ts",
+      "type": "file",
+      "path": "src/dsl/fromFlow.ts",
+      "sha256": "1efee89bd750948cde7346d909f2b906e2f10ea5a9ead51e894ba1958f48f433",
+      "bytes": 1940
+    },
+    {
+      "id": "project:glyph/file:src/dsl/parse.ts",
+      "type": "file",
+      "path": "src/dsl/parse.ts",
+      "sha256": "631ea67822def57728ff7c989cb48219b67cfe92e97aa2fafca396ebb743592a",
+      "bytes": 5524
+    },
+    {
+      "id": "project:glyph/file:src/dsl/schema.ts",
+      "type": "file",
+      "path": "src/dsl/schema.ts",
+      "sha256": "3ca8526daa671547f326f3c435fd5970a16a55c8f928eee854cf67465447eb28",
+      "bytes": 1709
+    },
+    {
+      "id": "project:glyph/file:src/dsl/toFlow.ts",
+      "type": "file",
+      "path": "src/dsl/toFlow.ts",
+      "sha256": "3d2054a87fca97bf4cccf3bcea52ae98047c8d0d3fcf697f8803e6b5f54f2437",
+      "bytes": 26874
+    },
+    {
+      "id": "project:glyph/file:src/main.ts",
+      "type": "file",
+      "path": "src/main.ts",
+      "sha256": "db027ec38bb7cc5680763a737207d98c9415b98509baabd2755713e7d819974f",
+      "bytes": 247
+    },
+    {
+      "id": "project:glyph/file:src/storage/graphs.ts",
+      "type": "file",
+      "path": "src/storage/graphs.ts",
+      "sha256": "54e470784e97a891b021091bb7854bc2e3a83292ac05cfc6b2b2bb998fae1007",
+      "bytes": 6960
+    },
+    {
+      "id": "project:glyph/file:tools/analyze-pf-forum.mjs",
+      "type": "file",
+      "path": "tools/analyze-pf-forum.mjs",
+      "sha256": "ecdb9a7343dbf221e4ab02a608dd3d0566252d5ce3188c652103ec5b95487c2d",
+      "bytes": 9265
+    },
+    {
+      "id": "project:glyph/file:tools/analyze-soft-pfforum.mjs",
+      "type": "file",
+      "path": "tools/analyze-soft-pfforum.mjs",
+      "sha256": "16a777e4613e796e3c385f1ec6e09811b7d1bc62b255c156f1a3b6bb976c5013",
+      "bytes": 11958
+    },
+    {
+      "id": "project:glyph/file:tools/lib/parser.mjs",
+      "type": "file",
+      "path": "tools/lib/parser.mjs",
+      "sha256": "f232d4cc69a69c37857d33a1319f91d6872f952b5b84da91c61314c14caa0e0f",
+      "bytes": 12829
+    },
+    {
+      "id": "project:glyph/file:tools/verify-dsl.mjs",
+      "type": "file",
+      "path": "tools/verify-dsl.mjs",
+      "sha256": "8d8f70a7edf4df7b31bb37ad34999167cd1de787ab1c9d3691accc1f57f01e5f",
+      "bytes": 2543
+    },
+    {
+      "id": "project:glyph/file:vite.config.ts",
+      "type": "file",
+      "path": "vite.config.ts",
+      "sha256": "6d4d39a073cad49623f412acaf234ff03a8e40f62153856ea945df4fed6c15bb",
+      "bytes": 329
+    },
+    {
+      "id": "package:npm:@codemirror/lang-yaml",
+      "type": "package",
+      "name": "@codemirror/lang-yaml",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@codemirror/state",
+      "type": "package",
+      "name": "@codemirror/state",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@codemirror/theme-one-dark",
+      "type": "package",
+      "name": "@codemirror/theme-one-dark",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@codemirror/view",
+      "type": "package",
+      "name": "@codemirror/view",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@dagrejs/dagre",
+      "type": "package",
+      "name": "@dagrejs/dagre",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vue-flow/background",
+      "type": "package",
+      "name": "@vue-flow/background",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vue-flow/controls",
+      "type": "package",
+      "name": "@vue-flow/controls",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vue-flow/core",
+      "type": "package",
+      "name": "@vue-flow/core",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vue-flow/node-resizer",
+      "type": "package",
+      "name": "@vue-flow/node-resizer",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vueuse/core",
+      "type": "package",
+      "name": "@vueuse/core",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:codemirror",
+      "type": "package",
+      "name": "codemirror",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:elkjs",
+      "type": "package",
+      "name": "elkjs",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:js-yaml",
+      "type": "package",
+      "name": "js-yaml",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:lucide-vue-next",
+      "type": "package",
+      "name": "lucide-vue-next",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:vue",
+      "type": "package",
+      "name": "vue",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:vue-codemirror",
+      "type": "package",
+      "name": "vue-codemirror",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@tsconfig/node24",
+      "type": "package",
+      "name": "@tsconfig/node24",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@types/js-yaml",
+      "type": "package",
+      "name": "@types/js-yaml",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@types/node",
+      "type": "package",
+      "name": "@types/node",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vitejs/plugin-vue",
+      "type": "package",
+      "name": "@vitejs/plugin-vue",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:@vue/tsconfig",
+      "type": "package",
+      "name": "@vue/tsconfig",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:typescript",
+      "type": "package",
+      "name": "typescript",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:vite",
+      "type": "package",
+      "name": "vite",
+      "ecosystem": "npm"
+    },
+    {
+      "id": "package:npm:vue-tsc",
+      "type": "package",
+      "name": "vue-tsc",
+      "ecosystem": "npm"
+    }
+  ],
+  "edges": [
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:README.md",
+      "relation": "contains",
+      "evidence": {
+        "path": "README.md"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:env.d.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "env.d.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:eslint.config.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "eslint.config.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:package.json",
+      "relation": "contains",
+      "evidence": {
+        "path": "package.json"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:qodana.yaml",
+      "relation": "contains",
+      "evidence": {
+        "path": "qodana.yaml"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/App.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/App.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/CardsListView.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/CardsListView.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/DslEditor.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/DslEditor.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/FlowEdge.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/FlowEdge.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/GraphCanvas.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/GraphCanvas.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/GraphPicker.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/GraphPicker.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/GroupNode.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/GroupNode.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/JunctionNode.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/JunctionNode.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/ObstructionNode.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/ObstructionNode.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/PerfOverlay.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/PerfOverlay.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/components/Toolbar.vue",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/components/Toolbar.vue"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/demo/pfForumDemo.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/demo/pfForumDemo.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/demo/softPfforumDemo.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/demo/softPfforumDemo.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/demo/vueAppDemo.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/demo/vueAppDemo.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/dsl/autoCluster.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/dsl/autoCluster.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/dsl/fromFlow.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/dsl/fromFlow.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/dsl/parse.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/dsl/parse.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/dsl/schema.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/dsl/toFlow.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/dsl/toFlow.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/main.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/main.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:src/storage/graphs.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "src/storage/graphs.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:tools/analyze-pf-forum.mjs",
+      "relation": "contains",
+      "evidence": {
+        "path": "tools/analyze-pf-forum.mjs"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:tools/analyze-soft-pfforum.mjs",
+      "relation": "contains",
+      "evidence": {
+        "path": "tools/analyze-soft-pfforum.mjs"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:tools/lib/parser.mjs",
+      "relation": "contains",
+      "evidence": {
+        "path": "tools/lib/parser.mjs"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:tools/verify-dsl.mjs",
+      "relation": "contains",
+      "evidence": {
+        "path": "tools/verify-dsl.mjs"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph",
+      "target": "project:glyph/file:vite.config.ts",
+      "relation": "contains",
+      "evidence": {
+        "path": "vite.config.ts"
+      },
+      "method": "filesystem"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/dsl/parse.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 6
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/dsl/toFlow.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 7
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/dsl/autoCluster.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 8
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/dsl/fromFlow.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 9
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 10
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/storage/graphs.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 17
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/components/GraphCanvas.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 18
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/components/DslEditor.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 19
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/components/GraphPicker.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 20
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/App.vue",
+      "target": "project:glyph/file:src/components/CardsListView.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/App.vue",
+        "line": 21
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/main.ts",
+      "target": "project:glyph/file:src/App.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/main.ts",
+        "line": 6
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:tools/analyze-pf-forum.mjs",
+      "target": "project:glyph/file:tools/lib/parser.mjs",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "tools/analyze-pf-forum.mjs",
+        "line": 27
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:tools/analyze-soft-pfforum.mjs",
+      "target": "project:glyph/file:tools/lib/parser.mjs",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "tools/analyze-soft-pfforum.mjs",
+        "line": 32
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/CardsListView.vue",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/CardsListView.vue",
+        "line": 17
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GraphCanvas.vue",
+      "target": "project:glyph/file:src/components/ObstructionNode.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GraphCanvas.vue",
+        "line": 12
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GraphCanvas.vue",
+      "target": "project:glyph/file:src/components/FlowEdge.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GraphCanvas.vue",
+        "line": 13
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GraphCanvas.vue",
+      "target": "project:glyph/file:src/components/JunctionNode.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GraphCanvas.vue",
+        "line": 14
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GraphCanvas.vue",
+      "target": "project:glyph/file:src/components/GroupNode.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GraphCanvas.vue",
+        "line": 15
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GraphCanvas.vue",
+      "target": "project:glyph/file:src/components/PerfOverlay.vue",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GraphCanvas.vue",
+        "line": 16
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GraphPicker.vue",
+      "target": "project:glyph/file:src/storage/graphs.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GraphPicker.vue",
+        "line": 12
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/GroupNode.vue",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/GroupNode.vue",
+        "line": 6
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/JunctionNode.vue",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/JunctionNode.vue",
+        "line": 4
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/components/ObstructionNode.vue",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/components/ObstructionNode.vue",
+        "line": 4
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/dsl/autoCluster.ts",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/dsl/autoCluster.ts",
+        "line": 25
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/dsl/fromFlow.ts",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/dsl/fromFlow.ts",
+        "line": 3
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/dsl/parse.ts",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/dsl/parse.ts",
+        "line": 9
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/dsl/toFlow.ts",
+      "target": "project:glyph/file:src/dsl/schema.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/dsl/toFlow.ts",
+        "line": 4
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/storage/graphs.ts",
+      "target": "project:glyph/file:src/demo/vueAppDemo.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/storage/graphs.ts",
+        "line": 13
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/storage/graphs.ts",
+      "target": "project:glyph/file:src/demo/pfForumDemo.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/storage/graphs.ts",
+        "line": 14
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/storage/graphs.ts",
+      "target": "project:glyph/file:src/demo/softPfforumDemo.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/storage/graphs.ts",
+        "line": 15
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:src/storage/graphs.ts",
+      "target": "project:glyph/file:src/dsl/parse.ts",
+      "relation": "imports_local",
+      "evidence": {
+        "path": "src/storage/graphs.ts",
+        "line": 16
+      },
+      "method": "lexical-existing-file"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@codemirror/lang-yaml",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 24
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@codemirror/state",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 25
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@codemirror/theme-one-dark",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 26
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@codemirror/view",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 27
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@dagrejs/dagre",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 28
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vue-flow/background",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 29
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vue-flow/controls",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 30
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vue-flow/core",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 31
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vue-flow/node-resizer",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 32
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vueuse/core",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 33
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:codemirror",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 34
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:elkjs",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 35
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:js-yaml",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 36
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:lucide-vue-next",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 37
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:vue",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 38
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:vue-codemirror",
+      "relation": "declares_dependency",
+      "kind": "dependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 39
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@tsconfig/node24",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 42
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@types/js-yaml",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 43
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@types/node",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 44
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vitejs/plugin-vue",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 45
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:@vue/tsconfig",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 46
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:typescript",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 47
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:vite",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 18
+      },
+      "method": "manifest"
+    },
+    {
+      "source": "project:glyph/file:package.json",
+      "target": "package:npm:vue-tsc",
+      "relation": "declares_dependency",
+      "kind": "devDependencies",
+      "evidence": {
+        "path": "package.json",
+        "line": 49
+      },
+      "method": "manifest"
+    }
+  ]
+}
