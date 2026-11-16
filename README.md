@@ -1,5 +1,7 @@
 # Glyph
 
+**ЦКП:** Интерактивная схема архитектуры, построенная из её текстового описания.
+
 > Architecture as glyphs — text DSL into a live animated graph.
 
 A prototype for visualizing project architecture in the visual language of node-editor games
